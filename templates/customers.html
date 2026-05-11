@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Customers — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Customers</h2>
+        <p>Manage customers including debit accounts</p>
+    </div>
+    <button class="btn btn-primary"
+            onclick="document.getElementById('addModal').classList.add('show')">
+        + Add Customer
+    </button>
+</div>
+
+<!-- Debit summary -->
+{% set debit_custs = custs|selectattr('debit_balance','gt',0)|list %}
+{% if debit_custs %}
+<div class="card" style="border-color:#f39c12;margin-bottom:14px;">
+    <div class="card-header">
+        <h3 style="color:#f39c12">⚠ {{ debit_custs|length }} customers have outstanding balances</h3>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Customer</th><th>Phone</th><th>Balance Owed</th><th>Limit</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for c in debit_custs %}
+            <tr>
+                <td><strong>{{ c.full_name }}</strong></td>
+                <td>{{ c.phone }}</td>
+                <td style="color:#e94560;font-weight:bold">
+                    TZS {{ "{:,.0f}".format(c.debit_balance) }}
+                </td>
+                <td style="color:#888">
+                    {% if c.debit_limit > 0 %}
+                    TZS {{ "{:,.0f}".format(c.debit_limit) }}
+                    {% else %}No limit{% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-success btn-sm"
+                            onclick="openPay({{ c.id }},'{{ c.full_name }}',{{ c.debit_balance }})">
+                        Record Payment
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- All customers -->
+<div class="card">
+    <div class="card-header">
+        <h3>All Customers ({{ custs|length }})</h3>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Name</th><th>Phone</th><th>Email</th><th>Branch</th><th>Debit Balance</th><th>Limit</th><th>Since</th></tr>
+        </thead>
+        <tbody>
+            {% for c in custs %}
+            <tr>
+                <td><strong>{{ c.full_name }}</strong></td>
+                <td>{{ c.phone or '—' }}</td>
+                <td style="color:#888">{{ c.email or '—' }}</td>
+                <td>{{ c.branch_name }}</td>
+                <td>
+                    {% if c.debit_balance > 0 %}
+                    <span class="badge badge-danger">
+                        TZS {{ "{:,.0f}".format(c.debit_balance) }}
+                    </span>
+                    {% else %}
+                    <span class="badge badge-success">Clear</span>
+                    {% endif %}
+                </td>
+                <td style="color:#888">
+                    {% if c.debit_limit > 0 %}
+                    TZS {{ "{:,.0f}".format(c.debit_limit) }}
+                    {% else %}—{% endif %}
+                </td>
+                <td style="color:#888">{{ c.created_at[:10] }}</td>
+            </tr>
+            {% endfor %}
+            {% if not custs %}
+            <tr>
+                <td colspan="7" style="text-align:center;color:#555;padding:24px">
+                    No customers yet
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h2>Add Customer</h2>
+        <form method="POST" action="/customers/add">
+            <div class="form-group">
+                <label>Full Name *</label>
+                <input type="text" name="full_name" required/>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="text" name="phone" placeholder="+255700000000"/>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Address</label>
+                <input type="text" name="address"/>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Debit Limit (TZS) — 0 = unlimited</label>
+                    <input type="number" name="debit_limit" value="0" step="1000"/>
+                </div>
+                <div class="form-group">
+                    <label>Branch *</label>
+                    <select name="branch_id">
+                        {% for b in branches %}
+                        <option value="{{ b.id }}"
+                            {% if b.id==session.branch_id %}selected{% endif %}>
+                            {{ b.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('addModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Add Customer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="payModal">
+    <div class="modal">
+        <h2>Record Payment</h2>
+        <p id="pay-customer-name" style="color:#888;margin-bottom:16px;font-size:0.85rem;"></p>
+        <form method="POST" id="payForm">
+            <div class="form-group">
+                <label>Amount Paid (TZS) *</label>
+                <input type="number" name="amount" required step="100" id="pay-amount"/>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('payModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Record Payment</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openPay(id, name, balance) {
+    document.getElementById('payForm').action = `/customers/pay/${id}`;
+    document.getElementById('pay-customer-name').textContent =
+        `${name} — Outstanding: TZS ${balance.toLocaleString()}`;
+    document.getElementById('pay-amount').max = balance;
+    document.getElementById('payModal').classList.add('show');
+}
+</script>
+{% endblock %}

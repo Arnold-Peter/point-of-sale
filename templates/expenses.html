@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Expenses — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Expenses</h2>
+        <p>Track and manage all business expenses</p>
+    </div>
+    <button class="btn btn-primary"
+            onclick="document.getElementById('addModal').classList.add('show')">
+        + Record Expense
+    </button>
+</div>
+
+<!-- Month filter -->
+<div class="card" style="padding:12px 20px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;gap:10px;align-items:flex-end;">
+        <div>
+            <label style="display:block;color:#888;font-size:0.72rem;margin-bottom:4px;text-transform:uppercase">Month</label>
+            <input type="month" name="from" value="{{ month }}"
+                   style="padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+<!-- Summary cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a0d0d">💸</div>
+        <div class="stat-info">
+            <div class="number" style="color:#e94560">TZS {{ "{:,.0f}".format(total_exp) }}</div>
+            <div class="label">Total Expenses</div>
+        </div>
+    </div>
+    {% for cat in by_cat %}
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#1a1a2e">📌</div>
+        <div class="stat-info">
+            <div class="number" style="color:#f39c12;font-size:1.1rem">
+                TZS {{ "{:,.0f}".format(cat.total) }}
+            </div>
+            <div class="label">{{ cat.category }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Expenses table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Expense Records — {{ month }}</h3>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Category</th><th>Description</th><th>Branch</th><th>Recorded By</th><th>Amount</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for e in exps %}
+            <tr>
+                <td style="color:#888">{{ e.created_at[:10] }}</td>
+                <td><span class="badge badge-warning">{{ e.category }}</span></td>
+                <td>{{ e.description }}</td>
+                <td>{{ e.branch_name }}</td>
+                <td style="color:#888">{{ e.recorded_by_name }}</td>
+                <td style="color:#e94560;font-weight:bold">
+                    TZS {{ "{:,.0f}".format(e.amount) }}
+                </td>
+                <td>
+                    <form method="POST" action="/expenses/delete/{{ e.id }}"
+                          onsubmit="return confirm('Delete expense?')"
+                          style="display:inline">
+                        <button class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align:center;color:#555;padding:24px">
+                    No expenses recorded for {{ month }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Expense Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h2>Record Expense</h2>
+        <form method="POST" action="/expenses/add">
+            <div class="form-group">
+                <label>Category *</label>
+                <select name="category" required
+                        style="width:100%;padding:9px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                    <option value="Rent">Rent</option>
+                    <option value="Salaries">Salaries</option>
+                    <option value="Utilities">Utilities (Water/Electricity)</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Marketing">Marketing / Advertising</option>
+                    <option value="Maintenance">Maintenance & Repairs</option>
+                    <option value="Supplies">Office Supplies</option>
+                    <option value="Stock Purchase">Stock Purchase</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description *</label>
+                <input type="text" name="description" required
+                       placeholder="Brief description of expense"/>
+            </div>
+            <div class="form-group">
+                <label>Amount (TZS) *</label>
+                <input type="number" name="amount" required step="100" min="1"/>
+            </div>
+            {% if session.role == 'admin' %}
+            <div class="form-group">
+                <label>Branch</label>
+                <select name="branch_id"
+                        style="width:100%;padding:9px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                </select>
+            </div>
+            {% endif %}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('addModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Record Expense</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

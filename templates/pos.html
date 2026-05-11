@@ -1,0 +1,436 @@
+{% extends 'base.html' %}
+{% block title %}POS Terminal — Noddy Store{% endblock %}
+
+{% block extra_css %}
+<style>
+.pos-layout{display:grid;grid-template-columns:1fr 380px;gap:0;height:calc(100vh - 40px);}
+.products-panel{padding:16px;overflow-y:auto;border-right:1px solid #1e1e3a;}
+.cart-panel{background:#13132a;display:flex;flex-direction:column;height:100%;}
+.search-bar{display:flex;gap:8px;margin-bottom:12px;}
+.search-bar input{flex:1;padding:9px 13px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;font-size:0.88rem;}
+.search-bar input:focus{border-color:#f39c12;}
+.cat-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+.cat-btn{padding:5px 12px;border-radius:20px;border:1px solid #2a2a4a;background:transparent;color:#888;cursor:pointer;font-size:0.78rem;transition:all .2s;}
+.cat-btn.active,.cat-btn:hover{background:#f39c12;color:#000;border-color:#f39c12;}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}
+.product-card{background:#13132a;border:1px solid #1e1e3a;border-radius:10px;padding:14px;cursor:pointer;transition:all .2s;position:relative;}
+.product-card:hover{border-color:#f39c12;background:#1a1a2e;}
+.product-card .pname{font-size:0.85rem;font-weight:500;margin-bottom:4px;color:#fff;}
+.product-card .pcat{font-size:0.72rem;color:#888;margin-bottom:6px;}
+.product-card .pprice{font-size:1rem;font-weight:700;color:#f39c12;}
+.product-card .pstock{font-size:0.7rem;color:#555;margin-top:3px;}
+.product-card.out-of-stock{opacity:.4;cursor:not-allowed;}
+.out-badge{position:absolute;top:6px;right:6px;background:#c0392b;color:#fff;font-size:0.65rem;padding:2px 6px;border-radius:4px;}
+.cart-header{padding:14px 16px;border-bottom:1px solid #1e1e3a;display:flex;justify-content:space-between;align-items:center;}
+.cart-header h3{font-size:0.95rem;color:#ccc;}
+.cart-items{flex:1;overflow-y:auto;padding:8px 16px;}
+.cart-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1e1e3a;}
+.cart-item-name{flex:1;font-size:0.83rem;}
+.cart-item-price{font-size:0.78rem;color:#888;}
+.qty-ctrl{display:flex;align-items:center;gap:6px;}
+.qty-btn{width:24px;height:24px;border-radius:4px;border:none;background:#1e1e3a;color:#fff;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;}
+.qty-btn:hover{background:#f39c12;color:#000;}
+.qty-val{min-width:24px;text-align:center;font-size:0.85rem;}
+.cart-item-total{font-size:0.85rem;color:#f39c12;min-width:80px;text-align:right;}
+.cart-remove{color:#e94560;cursor:pointer;font-size:0.9rem;padding:2px 6px;}
+.cart-footer{padding:14px 16px;border-top:1px solid #1e1e3a;}
+.total-row{display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.85rem;}
+.total-row.grand{font-size:1.1rem;font-weight:700;color:#f39c12;margin-top:8px;padding-top:8px;border-top:1px solid #1e1e3a;}
+.payment-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:10px 0;}
+.pay-btn{padding:8px;border:1px solid #2a2a4a;background:transparent;color:#888;border-radius:8px;cursor:pointer;font-size:0.78rem;transition:all .2s;}
+.pay-btn.active{background:#f39c12;color:#000;border-color:#f39c12;}
+.checkout-btn{width:100%;padding:13px;background:#f39c12;border:none;border-radius:10px;color:#000;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s;margin-top:8px;}
+.checkout-btn:hover{background:#e08e0b;}
+.checkout-btn:disabled{background:#333;color:#666;cursor:not-allowed;}
+.paid-input{width:100%;padding:9px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;font-size:0.9rem;margin-bottom:8px;}
+.paid-input:focus{border-color:#f39c12;}
+.empty-cart{text-align:center;padding:40px 20px;color:#555;}
+.empty-cart .icon{font-size:2.5rem;margin-bottom:8px;}
+
+/* Receipt modal */
+.receipt{background:#fff;color:#000;padding:20px;border-radius:8px;max-width:320px;margin:0 auto;font-family:'Courier New',monospace;font-size:0.82rem;}
+.receipt h2{text-align:center;font-size:1rem;margin-bottom:4px;}
+.receipt .store{text-align:center;font-size:0.75rem;color:#555;margin-bottom:12px;}
+.receipt hr{border:none;border-top:1px dashed #ccc;margin:8px 0;}
+.receipt .r-row{display:flex;justify-content:space-between;margin-bottom:3px;}
+.receipt .r-total{font-weight:bold;font-size:0.95rem;}
+.receipt .thank{text-align:center;margin-top:10px;font-size:0.78rem;color:#555;}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pos-layout">
+
+    <!-- Left: Products -->
+    <div class="products-panel">
+        <div class="search-bar">
+            <input type="text" id="prod-search"
+                   placeholder="Search product or scan barcode..."
+                   oninput="filterProducts()"/>
+        </div>
+        <div class="cat-filters">
+            <button class="cat-btn active" onclick="filterCat('',this)">All</button>
+            {% for c in categories %}
+            <button class="cat-btn"
+                    onclick="filterCat('{{ c.id }}',this)">
+                {{ c.name }}
+            </button>
+            {% endfor %}
+        </div>
+        <div class="product-grid" id="product-grid">
+            {% for p in products %}
+            <div class="product-card {% if p.stock_qty==0 %}out-of-stock{% endif %}"
+                 data-id="{{ p.id }}"
+                 data-name="{{ p.name }}"
+                 data-price="{{ p.selling_price }}"
+                 data-stock="{{ p.stock_qty }}"
+                 data-cat="{{ p.category_id }}"
+                 onclick="addToCart(this)">
+                {% if p.stock_qty == 0 %}
+                <span class="out-badge">Out</span>
+                {% endif %}
+                <div class="pname">{{ p.name }}</div>
+                <div class="pcat">{{ p.cat_name or '' }}</div>
+                <div class="pprice">TZS {{ "{:,.0f}".format(p.selling_price) }}</div>
+                <div class="pstock">Stock: {{ p.stock_qty }} {{ p.unit }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Right: Cart -->
+    <div class="cart-panel">
+        <div class="cart-header">
+            <h3>🛒 Cart</h3>
+            <button onclick="clearCart()"
+                    style="background:transparent;border:none;color:#e94560;cursor:pointer;font-size:0.8rem;">
+                Clear All
+            </button>
+        </div>
+
+        <!-- Cart items -->
+        <div class="cart-items" id="cart-items">
+            <div class="empty-cart" id="empty-msg">
+                <div class="icon">🛒</div>
+                <p>Cart is empty</p>
+                <p style="font-size:0.75rem;margin-top:4px">Click products to add</p>
+            </div>
+        </div>
+
+        <!-- Footer: totals + payment -->
+        <div class="cart-footer">
+            <!-- Customer select -->
+            <select id="customer-select"
+                    style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;margin-bottom:8px;font-size:0.83rem;">
+                <option value="">— Walk-in Customer —</option>
+                {% for c in customers %}
+                <option value="{{ c.id }}"
+                        data-balance="{{ c.debit_balance }}"
+                        data-limit="{{ c.debit_limit }}">
+                    {{ c.full_name }}
+                    {% if c.debit_balance > 0 %}
+                    (Owes: TZS {{ "{:,.0f}".format(c.debit_balance) }})
+                    {% endif %}
+                </option>
+                {% endfor %}
+            </select>
+
+            <!-- Totals -->
+            <div class="total-row">
+                <span>Items</span>
+                <span id="total-items">0</span>
+            </div>
+            <div class="total-row grand">
+                <span>TOTAL</span>
+                <span id="total-amount">TZS 0</span>
+            </div>
+
+            <!-- Payment type -->
+            <div class="payment-btns">
+                <button class="pay-btn active" onclick="setPayment('cash',this)">💵 Cash</button>
+                <button class="pay-btn" onclick="setPayment('card',this)">💳 Card</button>
+                <button class="pay-btn" onclick="setPayment('credit',this)">📋 Credit</button>
+            </div>
+
+            <!-- Paid amount (cash only) -->
+            <div id="paid-section">
+                <input type="number" class="paid-input" id="paid-amount"
+                       placeholder="Amount paid by customer" step="100"/>
+                <div class="total-row">
+                    <span>Change</span>
+                    <span id="change-amount" style="color:#00ff88">TZS 0</span>
+                </div>
+            </div>
+
+            <!-- Notes -->
+            <input type="text" class="paid-input" id="sale-notes"
+                   placeholder="Notes (optional)" style="margin-top:4px;"/>
+
+            <button class="checkout-btn" id="checkout-btn"
+                    onclick="checkout()" disabled>
+                Complete Sale
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Modal -->
+<div class="modal-overlay" id="receiptModal">
+    <div class="modal" style="max-width:380px">
+        <div id="receipt-content"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="window.print()">Print</button>
+            <button class="btn btn-primary" onclick="newSale()">New Sale</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let cart        = {};
+let paymentType = 'cash';
+
+// ── Add to cart ──────────────────────────────────────
+function addToCart(el) {
+    if (el.classList.contains('out-of-stock')) return;
+    const id    = el.dataset.id;
+    const name  = el.dataset.name;
+    const price = parseFloat(el.dataset.price);
+    const stock = parseInt(el.dataset.stock);
+
+    if (cart[id]) {
+        if (cart[id].qty >= stock) {
+            alert('Cannot exceed available stock!'); return;
+        }
+        cart[id].qty++;
+    } else {
+        cart[id] = { id, name, price, qty: 1, stock };
+    }
+    renderCart();
+}
+
+function changeQty(id, delta) {
+    if (!cart[id]) return;
+    cart[id].qty += delta;
+    if (cart[id].qty <= 0) delete cart[id];
+    else if (cart[id].qty > cart[id].stock) cart[id].qty = cart[id].stock;
+    renderCart();
+}
+
+function removeItem(id) {
+    delete cart[id];
+    renderCart();
+}
+
+function clearCart() {
+    cart = {};
+    renderCart();
+}
+
+// ── Render cart ──────────────────────────────────────
+function renderCart() {
+    const container = document.getElementById('cart-items');
+    const emptyMsg  = document.getElementById('empty-msg');
+    const ids       = Object.keys(cart);
+
+    if (!ids.length) {
+        emptyMsg.style.display = 'block';
+        document.getElementById('checkout-btn').disabled = true;
+        document.getElementById('total-items').textContent  = '0';
+        document.getElementById('total-amount').textContent = 'TZS 0';
+        document.getElementById('change-amount').textContent = 'TZS 0';
+        // Remove all item rows
+        container.querySelectorAll('.cart-item').forEach(e => e.remove());
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    document.getElementById('checkout-btn').disabled = false;
+
+    // Rebuild items
+    container.querySelectorAll('.cart-item').forEach(e => e.remove());
+    let total = 0, totalItems = 0;
+
+    ids.forEach(id => {
+        const item  = cart[id];
+        const iTotal = item.price * item.qty;
+        total      += iTotal;
+        totalItems += item.qty;
+
+        const div = document.createElement('div');
+        div.className = 'cart-item';
+        div.innerHTML = `
+            <div style="flex:1">
+                <div class="cart-item-name">${item.name}</div>
+                <div class="cart-item-price">
+                    TZS ${item.price.toLocaleString()} × ${item.qty}
+                </div>
+            </div>
+            <div class="qty-ctrl">
+                <button class="qty-btn" onclick="changeQty('${id}',-1)">−</button>
+                <span class="qty-val">${item.qty}</span>
+                <button class="qty-btn" onclick="changeQty('${id}',1)">+</button>
+            </div>
+            <div class="cart-item-total">TZS ${iTotal.toLocaleString()}</div>
+            <span class="cart-remove" onclick="removeItem('${id}')">✕</span>
+        `;
+        container.insertBefore(div, emptyMsg);
+    });
+
+    document.getElementById('total-items').textContent  = totalItems;
+    document.getElementById('total-amount').textContent =
+        'TZS ' + total.toLocaleString();
+    updateChange();
+}
+
+// ── Payment ──────────────────────────────────────────
+function setPayment(type, btn) {
+    paymentType = type;
+    document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('paid-section').style.display =
+        type === 'cash' ? 'block' : 'none';
+}
+
+function updateChange() {
+    const total = getTotal();
+    const paid  = parseFloat(document.getElementById('paid-amount').value) || 0;
+    const change = Math.max(0, paid - total);
+    document.getElementById('change-amount').textContent =
+        'TZS ' + change.toLocaleString();
+}
+
+document.getElementById('paid-amount')
+        .addEventListener('input', updateChange);
+
+function getTotal() {
+    return Object.values(cart).reduce(
+        (s, i) => s + i.price * i.qty, 0
+    );
+}
+
+// ── Search & filter ──────────────────────────────────
+let activeCat = '';
+
+function filterCat(catId, btn) {
+    activeCat = catId;
+    document.querySelectorAll('.cat-btn')
+            .forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterProducts();
+}
+
+function filterProducts() {
+    const q    = document.getElementById('prod-search').value.toLowerCase();
+    const cards = document.querySelectorAll('.product-card');
+    cards.forEach(card => {
+        const name  = card.dataset.name.toLowerCase();
+        const cat   = card.dataset.cat;
+        const matchQ   = !q || name.includes(q);
+        const matchCat = !activeCat || cat === activeCat;
+        card.style.display = (matchQ && matchCat) ? 'block' : 'none';
+    });
+}
+
+// ── Checkout ─────────────────────────────────────────
+function checkout() {
+    const ids = Object.keys(cart);
+    if (!ids.length) return;
+
+    const total      = getTotal();
+    const paidInput  = parseFloat(document.getElementById('paid-amount').value) || 0;
+    const customerId = document.getElementById('customer-select').value;
+    const notes      = document.getElementById('sale-notes').value;
+
+    if (paymentType === 'cash' && paidInput < total) {
+        alert('Paid amount is less than total!'); return;
+    }
+    if (paymentType === 'credit' && !customerId) {
+        alert('Please select a customer for credit sale!'); return;
+    }
+
+    const cartArr = Object.values(cart).map(i => ({
+        id: i.id, qty: i.qty, price: i.price
+    }));
+
+    document.getElementById('checkout-btn').disabled = true;
+    document.getElementById('checkout-btn').textContent = 'Processing...';
+
+    fetch('/pos/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            cart:         cartArr,
+            payment_type: paymentType,
+            paid_amount:  paidInput,
+            customer_id:  customerId || null,
+            notes
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showReceipt(data);
+        } else {
+            alert(data.message);
+            document.getElementById('checkout-btn').disabled = false;
+            document.getElementById('checkout-btn').textContent = 'Complete Sale';
+        }
+    });
+}
+
+function showReceipt(data) {
+    const itemsHtml = data.items.map(i => `
+        <div class="r-row">
+            <span>${i.name} x${i.qty}</span>
+            <span>TZS ${i.total.toLocaleString()}</span>
+        </div>
+    `).join('');
+
+    document.getElementById('receipt-content').innerHTML = `
+        <div class="receipt" id="printable">
+            <h2>🏪 NODDY STORE</h2>
+            <div class="store">${data.branch}<br>${data.datetime}</div>
+            <hr/>
+            <div class="r-row"><span>Receipt:</span><span>${data.receipt_no}</span></div>
+            <div class="r-row"><span>Cashier:</span><span>${data.cashier}</span></div>
+            <hr/>
+            ${itemsHtml}
+            <hr/>
+            <div class="r-row r-total">
+                <span>TOTAL</span>
+                <span>TZS ${data.total.toLocaleString()}</span>
+            </div>
+            ${data.payment === 'cash' ? `
+            <div class="r-row">
+                <span>Paid</span>
+                <span>TZS ${data.paid.toLocaleString()}</span>
+            </div>
+            <div class="r-row">
+                <span>Change</span>
+                <span>TZS ${data.change.toLocaleString()}</span>
+            </div>` : ''}
+            <div class="r-row">
+                <span>Payment</span>
+                <span>${data.payment.toUpperCase()}</span>
+            </div>
+            <hr/>
+            <div class="thank">Thank you for shopping!<br>Come again 😊</div>
+        </div>
+    `;
+    document.getElementById('receiptModal').classList.add('show');
+}
+
+function newSale() {
+    document.getElementById('receiptModal').classList.remove('show');
+    clearCart();
+    document.getElementById('paid-amount').value = '';
+    document.getElementById('sale-notes').value  = '';
+    document.getElementById('checkout-btn').disabled  = false;
+    document.getElementById('checkout-btn').textContent = 'Complete Sale';
+    // Reload to refresh stock
+    location.reload();
+}
+</script>
+{% endblock %}

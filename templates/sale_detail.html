@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Sale Detail — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Sale Details</h2>
+        <p>Receipt: {{ sale.receipt_no }}</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <button onclick="window.print()" class="btn btn-secondary">Print Receipt</button>
+        <a href="/sales" class="btn btn-secondary">← Back</a>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card">
+        <div class="card-header"><h3>Transaction Info</h3></div>
+        <table>
+            <tr><td style="color:#888">Receipt No</td><td style="color:#f39c12;font-weight:bold">{{ sale.receipt_no }}</td></tr>
+            <tr><td style="color:#888">Date/Time</td><td>{{ sale.created_at }}</td></tr>
+            <tr><td style="color:#888">Cashier</td><td>{{ sale.cashier }}</td></tr>
+            <tr><td style="color:#888">Branch</td><td>{{ sale.branch_name }}</td></tr>
+            <tr><td style="color:#888">Customer</td><td>{{ sale.customer_name or 'Walk-in' }}</td></tr>
+            <tr><td style="color:#888">Payment</td>
+                <td>
+                    <span class="badge badge-{% if sale.payment_type=='cash' %}success{% elif sale.payment_type=='card' %}info{% else %}warning{% endif %}">
+                        {{ sale.payment_type|upper }}
+                    </span>
+                </td>
+            </tr>
+            <tr><td style="color:#888">Total</td><td style="font-weight:bold;color:#f39c12">TZS {{ "{:,.0f}".format(sale.total_amount) }}</td></tr>
+            {% if sale.payment_type == 'cash' %}
+            <tr><td style="color:#888">Paid</td><td>TZS {{ "{:,.0f}".format(sale.paid_amount) }}</td></tr>
+            <tr><td style="color:#888">Change</td><td style="color:#00ff88">TZS {{ "{:,.0f}".format(sale.change_amount) }}</td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Items Sold</h3></div>
+        <table>
+            <thead>
+                <tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }} {{ item.unit }}</td>
+                    <td>TZS {{ "{:,.0f}".format(item.unit_price) }}</td>
+                    <td style="color:#f39c12">TZS {{ "{:,.0f}".format(item.total_price) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="text-align:right;font-weight:bold;padding:10px 14px;color:#888">TOTAL</td>
+                    <td style="font-weight:bold;color:#f39c12;padding:10px 14px">TZS {{ "{:,.0f}".format(sale.total_amount) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

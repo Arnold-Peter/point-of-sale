@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Categories — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Categories</h2>
+        <p>Organise products into categories within departments</p>
+    </div>
+    <button class="btn btn-primary"
+            onclick="document.getElementById('addModal').classList.add('show')">
+        + Add Category
+    </button>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr><th>#</th><th>Category</th><th>Department</th><th>Description</th><th>Products</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for c in cats %}
+            <tr>
+                <td>{{ c.id }}</td>
+                <td>🗂 <strong>{{ c.name }}</strong></td>
+                <td><span class="badge badge-info">{{ c.dept_name or '—' }}</span></td>
+                <td style="color:#888">{{ c.description or '—' }}</td>
+                <td><span class="badge badge-success">{{ c.product_count }} products</span></td>
+                <td>
+                    <form method="POST" action="/categories/delete/{{ c.id }}"
+                          onsubmit="return confirm('Delete category?')"
+                          style="display:inline">
+                        <button class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align:center;color:#555;padding:24px">
+                    No categories yet — add departments first!
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Category Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h2>Add Category</h2>
+        <form method="POST" action="/categories/add">
+            <div class="form-group">
+                <label>Category Name *</label>
+                <input type="text" name="name" required
+                       placeholder="e.g. Phones, Beverages, T-Shirts"/>
+            </div>
+            <div class="form-group">
+                <label>Department *</label>
+                <select name="department_id" required>
+                    <option value="">— Select Department —</option>
+                    {% for d in depts %}
+                    <option value="{{ d.id }}">{{ d.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="Brief description"/>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('addModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Add Category</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

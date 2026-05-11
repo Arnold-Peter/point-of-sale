@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Sales History — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Sales History</h2>
+        <p>View and filter all transactions</p>
+    </div>
+    <a href="/pos" class="btn btn-primary">+ New Sale</a>
+</div>
+
+<!-- Date filter -->
+<div class="card" style="padding:14px 20px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+            <label style="display:block;color:#888;font-size:0.72rem;margin-bottom:4px;text-transform:uppercase">From Date</label>
+            <input type="date" name="from" value="{{ date_from }}"
+                   style="padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+        </div>
+        <div>
+            <label style="display:block;color:#888;font-size:0.72rem;margin-bottom:4px;text-transform:uppercase">To Date</label>
+            <input type="date" name="to" value="{{ date_to }}"
+                   style="padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="/sales" class="btn btn-secondary">Today</a>
+    </form>
+</div>
+
+<!-- Summary -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a1a00">💰</div>
+        <div class="stat-info">
+            <div class="number" style="color:#f39c12">
+                TZS {{ "{:,.0f}".format(totals.total) }}
+            </div>
+            <div class="label">Total Revenue</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">🧾</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff">{{ totals.count }}</div>
+            <div class="label">Transactions</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d2a1a">📊</div>
+        <div class="stat-info">
+            <div class="number" style="color:#00ff88">
+                TZS {{ "{:,.0f}".format(totals.total / totals.count if totals.count else 0) }}
+            </div>
+            <div class="label">Avg. Sale Value</div>
+        </div>
+    </div>
+</div>
+
+<!-- Sales table -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Receipt</th>
+                <th>Date/Time</th>
+                <th>Cashier</th>
+                <th>Branch</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sale_list %}
+            <tr>
+                <td style="color:#f39c12;font-weight:500">{{ s.receipt_no }}</td>
+                <td style="color:#888;font-size:0.8rem">{{ s.created_at[:16] }}</td>
+                <td>{{ s.cashier }}</td>
+                <td>{{ s.branch_name }}</td>
+                <td>{{ s.customer_name or 'Walk-in' }}</td>
+                <td><strong>TZS {{ "{:,.0f}".format(s.total_amount) }}</strong></td>
+                <td>
+                    <span class="badge badge-{% if s.payment_type=='cash' %}success{% elif s.payment_type=='card' %}info{% else %}warning{% endif %}">
+                        {{ s.payment_type }}
+                    </span>
+                </td>
+                <td>
+                    <a href="/sales/{{ s.id }}"
+                       class="btn btn-secondary btn-sm">View</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align:center;color:#555;padding:32px">
+                    No sales in selected date range
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

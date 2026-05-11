@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}Edit Product — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Edit Product</h2>
+        <p>Update product details</p>
+    </div>
+    <a href="/products" class="btn btn-secondary">← Back</a>
+</div>
+
+<div class="card" style="max-width:680px;">
+    <form method="POST">
+        <div class="form-group">
+            <label>Product Name *</label>
+            <input type="text" name="name" value="{{ prod.name }}" required/>
+        </div>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Barcode</label>
+                <input type="text" name="barcode" value="{{ prod.barcode or '' }}"/>
+            </div>
+            <div class="form-group">
+                <label>Unit</label>
+                <select name="unit">
+                    {% for u in ['pcs','kg','g','litre','box','pack','dozen','pair'] %}
+                    <option value="{{ u }}" {% if prod.unit==u %}selected{% endif %}>{{ u }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Buying Price (TZS)</label>
+                <input type="number" name="buying_price"
+                       value="{{ prod.buying_price }}" step="0.01"/>
+            </div>
+            <div class="form-group">
+                <label>Selling Price (TZS)</label>
+                <input type="number" name="selling_price"
+                       value="{{ prod.selling_price }}" step="0.01"/>
+            </div>
+            <div class="form-group">
+                <label>Stock Quantity</label>
+                <input type="number" name="stock_qty" value="{{ prod.stock_qty }}"/>
+            </div>
+            <div class="form-group">
+                <label>Minimum Stock Alert</label>
+                <input type="number" name="min_stock" value="{{ prod.min_stock }}"/>
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category_id">
+                    {% for c in cats %}
+                    <option value="{{ c.id }}"
+                        {% if prod.category_id==c.id %}selected{% endif %}>
+                        {{ c.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Branch</label>
+                <select name="branch_id">
+                    {% for b in branches %}
+                    <option value="{{ b.id }}"
+                        {% if prod.branch_id==b.id %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <input type="text" name="description" value="{{ prod.description or '' }}"/>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px;">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="/products" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
