@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+{% block title %}Staff Management — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Staff Management</h2>
+        <p>Manage employees, attendance and salaries</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+        <a href="/staff/attendance/report" class="btn btn-secondary">Attendance Report</a>
+        <a href="/staff/performance" class="btn btn-secondary">Performance</a>
+        <a href="/users" class="btn btn-primary">+ Add Staff</a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">👥</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff">{{ staff_list|length }}</div>
+            <div class="label">Total Staff</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d2a1a">✅</div>
+        <div class="stat-info">
+            <div class="number" style="color:#00ff88">{{ attendance_today }}</div>
+            <div class="label">Present Today</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a1a00">💰</div>
+        <div class="stat-info">
+            <div class="number" style="color:#f39c12;font-size:1.1rem">
+                TZS {{ "{:,.0f}".format(salary_total) }}
+            </div>
+            <div class="label">Monthly Salary Bill</div>
+        </div>
+    </div>
+    <div class="stat-card"
+         style="border-color:{% if recommendation.status=='optimal' %}#27ae60{% elif recommendation.status=='increase' %}#e94560{% else %}#f39c12{% endif %}">
+        <div class="stat-icon"
+             style="background:{% if recommendation.status=='optimal' %}#0d2a1a{% elif recommendation.status=='increase' %}#2a0d0d{% else %}#2a1a00{% endif %}">
+            {% if recommendation.status=='optimal' %}✅
+            {% elif recommendation.status=='increase' %}📈
+            {% else %}📉{% endif %}
+        </div>
+        <div class="stat-info">
+            <div class="number"
+                 style="font-size:1rem;color:{% if recommendation.status=='optimal' %}#00ff88{% elif recommendation.status=='increase' %}#e94560{% else %}#f39c12{% endif %}">
+                {{ recommendation.status|upper }}
+            </div>
+            <div class="label">Staff Recommendation</div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Staff Recommendation -->
+<div class="card" style="margin-bottom:16px;border-color:{% if recommendation.status=='optimal' %}#27ae60{% elif recommendation.status=='increase' %}#e94560{% else %}#f39c12{% endif %}">
+    <div class="card-header">
+        <h3>🤖 AI Staff Recommendation</h3>
+        <span style="color:#888;font-size:0.78rem">
+            Based on last 30 days of transactions
+        </span>
+    </div>
+    <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+            <p style="font-size:0.88rem;color:#ccc;line-height:1.6">
+                {{ recommendation.message }}
+            </p>
+        </div>
+        <div style="display:flex;gap:16px;">
+            <div style="text-align:center;">
+                <div style="font-size:1.8rem;font-weight:700;color:#4a9eff">
+                    {{ recommendation.current }}
+                </div>
+                <div style="font-size:0.72rem;color:#888;text-transform:uppercase">Current</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:1.8rem;font-weight:700;color:#f39c12">
+                    {{ recommendation.recommended }}
+                </div>
+                <div style="font-size:0.72rem;color:#888;text-transform:uppercase">Recommended</div>
+            </div>
+            <div style="text-align:center;">
+                <div style="font-size:1.8rem;font-weight:700;color:#888">
+                    {{ recommendation.avg_txns }}
+                </div>
+                <div style="font-size:0.72rem;color:#888;text-transform:uppercase">Avg Daily Txns</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Staff list -->
+<div class="card">
+    <div class="card-header">
+        <h3>Staff List</h3>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Days Present</th>
+                <th>This Month Salary</th>
+                <th>Attendance</th>
+                <th>Salary</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in staff_list %}
+            <tr>
+                <td><strong>{{ s.full_name }}</strong></td>
+                <td>
+                    <span class="badge badge-{% if s.role=='manager' %}warning{% else %}info{% endif %}">
+                        {{ s.role }}
+                    </span>
+                </td>
+                <td>{{ s.branch_name }}</td>
+                <td>
+                    <span class="badge badge-{% if s.active %}success{% else %}danger{% endif %}">
+                        {% if s.active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </td>
+                <td style="text-align:center">{{ s.attendance_days }} days</td>
+                <td>
+                    {% if s.salary > 0 %}
+                    <span style="color:#f39c12">
+                        TZS {{ "{:,.0f}".format(s.salary) }}
+                    </span>
+                    {% else %}
+                    <span style="color:#555">Not set</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <form method="POST" action="/staff/attendance"
+                          style="display:inline">
+                        <input type="hidden" name="user_id" value="{{ s.id }}"/>
+                        <input type="hidden" name="status" value="present"/>
+                        <button class="btn btn-success btn-sm">Check In</button>
+                    </form>
+                    <form method="POST" action="/staff/checkout/{{ s.id }}"
+                          style="display:inline">
+                        <button class="btn btn-secondary btn-sm">Check Out</button>
+                    </form>
+                </td>
+                <td>
+                    <button class="btn btn-secondary btn-sm"
+                            onclick="openSalary({{ s.id }},'{{ s.full_name }}',{{ s.salary }})">
+                        Set Salary
+                    </button>
+                    {% if s.salary > 0 %}
+                    <form method="POST" action="/staff/salary/pay/{{ s.id }}"
+                          onsubmit="return confirm('Pay salary for {{ s.full_name }}?')"
+                          style="display:inline">
+                        <button class="btn btn-primary btn-sm">Pay</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align:center;color:#555;padding:24px">
+                    No staff found. Add users first.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Set Salary Modal -->
+<div class="modal-overlay" id="salaryModal">
+    <div class="modal">
+        <h2>Set Monthly Salary</h2>
+        <p id="salary-name" style="color:#888;margin-bottom:16px;font-size:0.85rem;"></p>
+        <form method="POST" action="/staff/salary/set">
+            <input type="hidden" name="user_id" id="salary-user-id"/>
+            <div class="form-group">
+                <label>Monthly Salary (TZS) *</label>
+                <input type="number" name="amount" id="salary-amount"
+                       required step="1000" min="0"/>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('salaryModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">Save Salary</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openSalary(id, name, current) {
+    document.getElementById('salary-user-id').value  = id;
+    document.getElementById('salary-amount').value   = current || '';
+    document.getElementById('salary-name').textContent =
+        `Staff: ${name} | Current: TZS ${current.toLocaleString()}`;
+    document.getElementById('salaryModal').classList.add('show');
+}
+</script>
+{% endblock %}

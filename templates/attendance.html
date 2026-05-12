@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Attendance Report — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h2>Attendance Report</h2>
+        <p>Monthly staff attendance records</p>
+    </div>
+    <a href="/staff" class="btn btn-secondary">← Back</a>
+</div>
+
+<!-- Month filter -->
+<div class="card" style="padding:12px 20px;margin-bottom:14px;">
+    <form method="GET" style="display:flex;gap:10px;align-items:flex-end;">
+        <div>
+            <label style="display:block;color:#888;font-size:0.72rem;margin-bottom:4px;text-transform:uppercase">Month</label>
+            <input type="month" name="month" value="{{ month }}"
+                   style="padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>Attendance Records — {{ month }}</h3>
+        <span style="color:#888;font-size:0.78rem">{{ records|length }} records</span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Staff Name</th>
+                <th>Branch</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Hours</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            {% set hours = '—' %}
+            {% if r.check_in and r.check_out %}
+                {% set h_in  = r.check_in[:5].split(':') %}
+                {% set h_out = r.check_out[:5].split(':') %}
+            {% endif %}
+            <tr>
+                <td>{{ r.date }}</td>
+                <td><strong>{{ r.full_name }}</strong></td>
+                <td>{{ r.branch_name }}</td>
+                <td style="color:#00ff88">{{ r.check_in or '—' }}</td>
+                <td style="color:#f39c12">{{ r.check_out or 'Still in' }}</td>
+                <td style="color:#888">—</td>
+                <td>
+                    <span class="badge badge-{% if r.status=='present' %}success{% elif r.status=='late' %}warning{% else %}danger{% endif %}">
+                        {{ r.status }}
+                    </span>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align:center;color:#555;padding:24px">
+                    No attendance records for {{ month }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

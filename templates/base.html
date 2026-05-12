@@ -7,8 +7,6 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
         body{background:#0f0f1a;color:#fff;font-family:'Segoe UI',sans-serif;display:flex;min-height:100vh;}
-
-        /* Sidebar */
         .sidebar{width:220px;background:#13132a;border-right:1px solid #1e1e3a;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100;overflow-y:auto;}
         .sidebar-logo{padding:20px 16px;border-bottom:1px solid #1e1e3a;}
         .sidebar-logo h1{font-size:1.2rem;color:#fff;}
@@ -25,32 +23,22 @@
         .user-role{font-size:0.7rem;color:#888;text-transform:capitalize;}
         .btn-logout{margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid #2a2a4a;border-radius:6px;color:#888;cursor:pointer;font-size:0.78rem;}
         .btn-logout:hover{border-color:#f39c12;color:#f39c12;}
-
-        /* Main */
         .main{margin-left:220px;flex:1;padding:20px;overflow-y:auto;}
         .page-header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;}
         .page-header h2{font-size:1.5rem;font-weight:600;}
         .page-header p{color:#888;font-size:0.85rem;margin-top:3px;}
-
-        /* Cards */
         .card{background:#13132a;border-radius:12px;border:1px solid #1e1e3a;padding:20px;margin-bottom:16px;}
         .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e1e3a;}
         .card-header h3{font-size:0.95rem;color:#ccc;}
-
-        /* Stat cards */
         .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
         .stat-card{background:#13132a;border-radius:12px;padding:18px;border:1px solid #1e1e3a;display:flex;align-items:center;gap:14px;}
-        .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;}
+        .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
         .stat-info .number{font-size:1.6rem;font-weight:700;}
         .stat-info .label{color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
-
-        /* Tables */
         table{width:100%;border-collapse:collapse;}
         th,td{padding:10px 14px;text-align:left;font-size:0.82rem;border-bottom:1px solid #1e1e3a;}
         th{color:#888;text-transform:uppercase;font-size:0.7rem;letter-spacing:.5px;}
         tr:hover td{background:#1a1a3a;}
-
-        /* Buttons */
         .btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:500;text-decoration:none;display:inline-block;}
         .btn-primary{background:#f39c12;color:#000;}
         .btn-primary:hover{background:#e08e0b;}
@@ -58,35 +46,24 @@
         .btn-success{background:#27ae60;color:#fff;}
         .btn-secondary{background:#1e1e3a;color:#ccc;}
         .btn-sm{padding:4px 10px;font-size:0.75rem;}
-
-        /* Forms */
         .form-group{margin-bottom:14px;}
         .form-group label{display:block;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
         .form-group input,.form-group select,.form-group textarea{width:100%;padding:9px 13px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;font-size:0.88rem;outline:none;}
         .form-group input:focus,.form-group select:focus{border-color:#f39c12;}
         .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-        .form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
-
-        /* Badges */
         .badge{padding:3px 8px;border-radius:4px;font-size:0.7rem;font-weight:500;}
         .badge-success{background:#0d2a1a;color:#00ff88;}
         .badge-danger{background:#2a0d0d;color:#e94560;}
         .badge-warning{background:#2a1a00;color:#f39c12;}
         .badge-info{background:#0d1a2a;color:#4a9eff;}
-
-        /* Alerts */
         .alert{padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;}
         .alert-success{background:#0d2a1a;border:1px solid #2a5a2a;color:#00ff88;}
         .alert-error{background:#2a0d0d;border:1px solid #5a2a2a;color:#ff6b6b;}
-
-        /* Modal */
         .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;}
         .modal-overlay.show{display:flex;}
         .modal{background:#13132a;border-radius:12px;padding:24px;width:480px;border:1px solid #2a2a4a;max-height:90vh;overflow-y:auto;}
         .modal h2{font-size:1.1rem;margin-bottom:16px;color:#f39c12;}
         .modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
-
-        /* Scrollbar */
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#0f0f1a;}
         ::-webkit-scrollbar-thumb{background:#2a2a4a;border-radius:3px;}
@@ -94,23 +71,19 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-
-<!-- Sidebar -->
 <div class="sidebar">
     <div class="sidebar-logo">
         <h1>🏪 <span>Noddy</span> Store</h1>
         <p>Point of Sale System</p>
     </div>
-
     <nav>
         <div class="nav-section">Main</div>
         <a href="/" class="nav-item {% if request.path=='/' %}active{% endif %}">
             <span class="icon">⊞</span> Dashboard
         </a>
-        <a href="/pos" class="nav-item {% if '/pos' in request.path %}active{% endif %}">
+        <a href="/pos" class="nav-item {% if request.path=='/pos' %}active{% endif %}">
             <span class="icon">🛒</span> POS Terminal
         </a>
-
         <div class="nav-section">Inventory</div>
         <a href="/products" class="nav-item {% if '/products' in request.path %}active{% endif %}">
             <span class="icon">📦</span> Products
@@ -121,12 +94,11 @@
         <a href="/departments" class="nav-item {% if '/departments' in request.path %}active{% endif %}">
             <span class="icon">🏢</span> Departments
         </a>
-        <a href="/stock" class="nav-item {% if '/stock' in request.path %}active{% endif %}">
+        <a href="/stock" class="nav-item {% if request.path=='/stock' %}active{% endif %}">
             <span class="icon">📊</span> Stock
         </a>
-
         <div class="nav-section">Sales</div>
-        <a href="/sales" class="nav-item {% if '/sales' in request.path %}active{% endif %}">
+        <a href="/sales" class="nav-item {% if request.path=='/sales' %}active{% endif %}">
             <span class="icon">💰</span> Sales History
         </a>
         <a href="/customers" class="nav-item {% if '/customers' in request.path %}active{% endif %}">
@@ -135,26 +107,32 @@
         <a href="/expenses" class="nav-item {% if '/expenses' in request.path %}active{% endif %}">
             <span class="icon">💸</span> Expenses
         </a>
-
         <div class="nav-section">Reports</div>
-        <a href="/reports" class="nav-item {% if '/reports' in request.path %}active{% endif %}">
+        <a href="/reports" class="nav-item {% if request.path=='/reports' %}active{% endif %}">
             <span class="icon">📈</span> Reports
         </a>
-
         <div class="nav-section">Management</div>
-        <a href="/staff" class="nav-item {% if '/staff' in request.path %}active{% endif %}">
+        <a href="/staff" class="nav-item {% if request.path=='/staff' %}active{% endif %}">
             <span class="icon">👤</span> Staff
         </a>
-        <a href="/branches" class="nav-item {% if '/branches' in request.path %}active{% endif %}">
+        <a href="/staff/performance" class="nav-item {% if '/staff/performance' in request.path %}active{% endif %}">
+            <span class="icon">🏅</span> Performance
+        </a>
+        <a href="/staff/attendance/report" class="nav-item {% if '/attendance' in request.path %}active{% endif %}">
+            <span class="icon">📅</span> Attendance
+        </a>
+        <a href="/branches" class="nav-item {% if request.path=='/branches' %}active{% endif %}">
             <span class="icon">🏬</span> Branches
         </a>
+        <a href="/branch/overview" class="nav-item {% if '/branch/overview' in request.path %}active{% endif %}">
+            <span class="icon">🌐</span> Branch Overview
+        </a>
         {% if session.role == 'admin' %}
-        <a href="/users" class="nav-item {% if '/users' in request.path %}active{% endif %}">
+        <a href="/users" class="nav-item {% if request.path=='/users' %}active{% endif %}">
             <span class="icon">⚙</span> Users
         </a>
         {% endif %}
     </nav>
-
     <div class="sidebar-user">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
             <div class="user-avatar">{{ session.full_name[0]|upper }}</div>
@@ -166,8 +144,6 @@
         <a href="/logout"><button class="btn-logout">Sign Out</button></a>
     </div>
 </div>
-
-<!-- Main content -->
 <div class="main">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -176,10 +152,8 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-
     {% block content %}{% endblock %}
 </div>
-
 {% block extra_js %}{% endblock %}
 </body>
 </html>

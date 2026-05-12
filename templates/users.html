@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Users — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h2>User Management</h2><p>Manage system users and access levels</p></div>
+    <button class="btn btn-primary"
+            onclick="document.getElementById('addModal').classList.add('show')">
+        + Add User
+    </button>
+</div>
+
+<!-- Stats -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+    {% set active_count = users|selectattr('active','eq',1)|list|length %}
+    {% set admin_count  = users|selectattr('role','eq','admin')|list|length %}
+    {% set mgr_count    = users|selectattr('role','eq','manager')|list|length %}
+    {% set cash_count   = users|selectattr('role','eq','cashier')|list|length %}
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">👥</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff">{{ users|length }}</div>
+            <div class="label">Total Users</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d2a1a">✅</div>
+        <div class="stat-info">
+            <div class="number" style="color:#00ff88">{{ active_count }}</div>
+            <div class="label">Active Users</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a0d0d">🛡</div>
+        <div class="stat-info">
+            <div class="number" style="color:#e94560">{{ admin_count }}</div>
+            <div class="label">Admins</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a1a00">💼</div>
+        <div class="stat-info">
+            <div class="number" style="color:#f39c12">{{ mgr_count }}</div>
+            <div class="label">Managers</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>All Users ({{ users|length }})</h3>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Full Name</th><th>Username</th><th>Role</th>
+                <th>Branch</th><th>Status</th><th>Created</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td><strong>{{ u.full_name }}</strong></td>
+                <td style="color:#888">{{ u.username }}</td>
+                <td>
+                    <span class="badge badge-{% if u.role=='admin' %}danger
+                        {% elif u.role=='manager' %}warning{% else %}info{% endif %}">
+                        {{ u.role }}
+                    </span>
+                </td>
+                <td>{{ u.branch_name or '—' }}</td>
+                <td>
+                    <span class="badge badge-{% if u.active %}success{% else %}danger{% endif %}">
+                        {% if u.active %}Active{% else %}Inactive{% endif %}
+                    </span>
+                </td>
+                <td style="color:#888;font-size:0.78rem">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+                <td>
+                    {% if u.username != 'admin' %}
+                    <form method="POST" action="/users/toggle/{{ u.id }}" style="display:inline">
+                        <button class="btn btn-secondary btn-sm">
+                            {% if u.active %}Deactivate{% else %}Activate{% endif %}
+                        </button>
+                    </form>
+                    {% else %}
+                    <span style="color:#555;font-size:0.75rem">Protected</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h2>Add New User</h2>
+        <form method="POST" action="/users/add">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" name="full_name" required/>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" name="username" required/>
+                </div>
+                <div class="form-group">
+                    <label>Password *</label>
+                    <input type="password" name="password" required/>
+                </div>
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select name="role">
+                        <option value="cashier">Cashier</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Branch *</label>
+                <select name="branch_id">
+                    {% for b in branches %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('addModal').classList.remove('show')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add User</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
