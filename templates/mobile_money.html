@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% block title %}Mobile Money — Noddy Store{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h2>Mobile Money</h2><p>Track M-Pesa, Airtel Money, Tigo Pesa and other transactions</p></div>
+    <button class="btn btn-primary" onclick="document.getElementById('addModal').classList.add('show')">
+        + Record Transaction
+    </button>
+</div>
+
+<!-- Summary cards per provider -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d2a1a">📥</div>
+        <div class="stat-info">
+            <div class="number" style="color:#00ff88;font-size:1.1rem">
+                TZS {{ "{:,.0f}".format(overall.total_credited) }}
+            </div>
+            <div class="label">Total Credited</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a0d0d">📤</div>
+        <div class="stat-info">
+            <div class="number" style="color:#e94560;font-size:1.1rem">
+                TZS {{ "{:,.0f}".format(overall.total_debited) }}
+            </div>
+            <div class="label">Total Debited</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">💳</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff;font-size:1.1rem">{{ overall.count }}</div>
+            <div class="label">Total Transactions</div>
+        </div>
+    </div>
+    <div class="stat-card" style="border-color:{% if overall.total_credited>=overall.total_debited %}#27ae60{% else %}#c0392b{% endif %}">
+        <div class="stat-icon" style="background:{% if overall.total_credited>=overall.total_debited %}#0d2a1a{% else %}#2a0d0d{% endif %}">⚖</div>
+        <div class="stat-info">
+            <div class="number" style="color:{% if overall.total_credited>=overall.total_debited %}#00ff88{% else %}#e94560{% endif %};font-size:1.1rem">
+                TZS {{ "{:,.0f}".format(overall.total_credited - overall.total_debited) }}
+            </div>
+            <div class="label">Net Balance</div>
+        </div>
+    </div>
+</div>
+
+<!-- Provider breakdown -->
+{% if summary %}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-header"><h3>By Provider</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;">
+        {% for s in summary %}
+        {% set provider_colors = {'M-Pesa':'#00c853','Airtel Money':'#e53935','Tigo Pesa':'#1565c0','Halopesa':'#f57c00','TigoPesa':'#1565c0'} %}
+        <div style="background:#0f0f1a;border:1px solid #2a2a4a;border-radius:10px;padding:14px;
+                    border-top:3px solid {{ provider_colors.get(s.provider,'#f39c12') }}">
+            <div style="font-weight:700;font-size:1rem;color:#fff;margin-bottom:8px;">
+                📱 {{ s.provider }}
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.82rem;">
+                <span style="color:#888">Credited</span>
+                <span style="color:#00ff88;font-weight:600">TZS {{ "{:,.0f}".format(s.total_credited) }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:0.82rem;">
+                <span style="color:#888">Debited</span>
+                <span style="color:#e94560;font-weight:600">TZS {{ "{:,.0f}".format(s.total_debited) }}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+                <span style="color:#888">Transactions</span>
+                <span style="color:#4a9eff">{{ s.count }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Date filter -->
+<div class="filter-bar" style="margin-bottom:14px;">
+    <form method="GET" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div>
+            <span class="filter-label">From Date</span>
+            <input type="date" name="from" value="{{ date_from }}"/>
+        </div>
+        <div>
+            <span class="filter-label">To Date</span>
+            <input type="date" name="to" value="{{ date_to }}"/>
+        </div>
+        <div>
+            <span class="filter-label">Provider</span>
+            <select name="provider">
+                <option value="">All Providers</option>
+                {% for p in ['M-Pesa','Airtel Money','Tigo Pesa','Halopesa','Other'] %}
+                <option value="{{ p }}" {% if provider==p %}selected{% endif %}>{{ p }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="/mobile_money" class="btn btn-secondary">Reset</a>
+    </form>
+</div>
+
+<!-- Transactions table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Transactions ({{ txns|length }})</h3>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Date/Time</th><th>Provider</th><th>Type</th><th>Phone</th>
+                <th>Amount</th><th>Reference</th><th>Description</th>
+                <th>Branch</th><th>Recorded By</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+            {% for t in txns %}
+            <tr>
+                <td style="color:#888;font-size:0.78rem">{{ t.created_at[:16] }}</td>
+                <td>
+                    <span style="font-weight:600;color:#f39c12">{{ t.provider }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-{% if t.type=='credit' %}success{% else %}danger{% endif %}">
+                        {% if t.type=='credit' %}📥 Credit{% else %}📤 Debit{% endif %}
+                    </span>
+                </td>
+                <td style="color:#888">{{ t.phone_number or '—' }}</td>
+                <td style="color:{% if t.type=='credit' %}#00ff88{% else %}#e94560{% endif %};font-weight:700">
+                    TZS {{ "{:,.0f}".format(t.amount) }}
+                </td>
+                <td style="color:#888;font-size:0.78rem">{{ t.reference or '—' }}</td>
+                <td>{{ t.description or '—' }}</td>
+                <td style="color:#888">{{ t.branch_name }}</td>
+                <td style="color:#888">{{ t.recorded_by_name }}</td>
+                <td>
+                    <form method="POST" action="/mobile_money/delete/{{ t.id }}"
+                          onsubmit="return confirm('Delete this transaction?')" style="display:inline">
+                        <button class="btn btn-danger btn-sm">Del</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="10" style="text-align:center;color:#555;padding:32px">
+                    No transactions found for selected period
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h2>Record Mobile Money Transaction</h2>
+        <form method="POST" action="/mobile_money/add">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Provider *</label>
+                    <select name="provider" required>
+                        <option value="M-Pesa">M-Pesa</option>
+                        <option value="Airtel Money">Airtel Money</option>
+                        <option value="Tigo Pesa">Tigo Pesa</option>
+                        <option value="Halopesa">Halopesa</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Transaction Type *</label>
+                    <select name="type" required>
+                        <option value="credit">📥 Credit (Money In)</option>
+                        <option value="debit">📤 Debit (Money Out)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="text" name="phone_number" placeholder="+255700000000"/>
+                </div>
+                <div class="form-group">
+                    <label>Amount (TZS) *</label>
+                    <input type="number" name="amount" required step="100" min="1"/>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Reference / Transaction ID</label>
+                <input type="text" name="reference" placeholder="e.g. QK12345678"/>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" name="description" placeholder="What was this for?"/>
+            </div>
+            {% if session.role == 'admin' %}
+            <div class="form-group">
+                <label>Branch</label>
+                <select name="branch_id">
+                    {% for b in branches %}
+                    <option value="{{ b.id }}" {% if b.id==session.branch_id %}selected{% endif %}>
+                        {{ b.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('addModal').classList.remove('show')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Record Transaction</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

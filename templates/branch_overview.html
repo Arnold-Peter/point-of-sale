@@ -2,74 +2,58 @@
 {% block title %}Branch Overview — Noddy Store{% endblock %}
 {% block content %}
 <div class="page-header">
-    <div>
-        <h2>Multi-Branch Overview</h2>
-        <p>Consolidated performance across all branches</p>
-    </div>
+    <div><h2>Multi-Branch Overview</h2><p>Consolidated performance across all branches</p></div>
     <a href="/reports" class="btn btn-primary">Detailed Reports</a>
 </div>
 
 <!-- Consolidated totals -->
-<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px;">
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:20px;">
     <div class="stat-card">
-        <div class="stat-icon" style="background:#2a1a00">💰</div>
+        <div class="stat-icon" style="background:#2a1a00;font-size:1rem">💰</div>
         <div class="stat-info">
-            <div class="number" style="color:#f39c12;font-size:1rem">
-                TZS {{ "{:,.0f}".format(totals.today_revenue) }}
-            </div>
-            <div class="label">Today's Revenue</div>
+            <div class="number" style="color:#f39c12;font-size:0.95rem">TZS {{ "{:,.0f}".format(totals.today_revenue) }}</div>
+            <div class="label">Today Revenue</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d2a1a">📈</div>
+        <div class="stat-icon" style="background:#0d2a1a;font-size:1rem">📈</div>
         <div class="stat-info">
-            <div class="number" style="color:#00ff88;font-size:1rem">
-                TZS {{ "{:,.0f}".format(totals.month_revenue) }}
-            </div>
+            <div class="number" style="color:#00ff88;font-size:0.95rem">TZS {{ "{:,.0f}".format(totals.month_revenue) }}</div>
             <div class="label">Month Revenue</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#2a0d0d">💸</div>
+        <div class="stat-icon" style="background:#2a0d0d;font-size:1rem">💸</div>
         <div class="stat-info">
-            <div class="number" style="color:#e94560;font-size:1rem">
-                TZS {{ "{:,.0f}".format(totals.month_expenses) }}
-            </div>
+            <div class="number" style="color:#e94560;font-size:0.95rem">TZS {{ "{:,.0f}".format(totals.month_expenses) }}</div>
             <div class="label">Month Expenses</div>
         </div>
     </div>
-    <div class="stat-card"
-         style="border-color:{% if totals.net_profit>=0 %}#27ae60{% else %}#c0392b{% endif %}">
-        <div class="stat-icon"
-             style="background:{% if totals.net_profit>=0 %}#0d2a1a{% else %}#2a0d0d{% endif %}">
-            {% if totals.net_profit >= 0 %}✅{% else %}❌{% endif %}
+    <div class="stat-card" style="border-color:{% if totals.net_profit>=0 %}#27ae60{% else %}#c0392b{% endif %}">
+        <div class="stat-icon" style="background:{% if totals.net_profit>=0 %}#0d2a1a{% else %}#2a0d0d{% endif %};font-size:1rem">
+            {% if totals.net_profit>=0 %}✅{% else %}❌{% endif %}
         </div>
         <div class="stat-info">
-            <div class="number"
-                 style="color:{% if totals.net_profit>=0 %}#00ff88{% else %}#e94560{% endif %};font-size:1rem">
+            <div class="number" style="color:{% if totals.net_profit>=0 %}#00ff88{% else %}#e94560{% endif %};font-size:0.95rem">
                 TZS {{ "{:,.0f}".format(totals.net_profit) }}
             </div>
             <div class="label">Net Profit</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d1a2a">👥</div>
+        <div class="stat-icon" style="background:#0d1a2a;font-size:1rem">👥</div>
         <div class="stat-info">
             <div class="number" style="color:#4a9eff">{{ totals.staff }}</div>
             <div class="label">Total Staff</div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-icon"
-             style="background:{% if totals.low_stock>0 %}#2a0d0d{% else %}#0d2a1a{% endif %}">
-            ⚠
-        </div>
+    <div class="stat-card" style="border-color:{% if totals.low_stock>0 %}#c0392b{% else %}#1e1e3a{% endif %}">
+        <div class="stat-icon" style="background:{% if totals.low_stock>0 %}#2a0d0d{% else %}#0d2a1a{% endif %};font-size:1rem">⚠</div>
         <div class="stat-info">
-            <div class="number"
-                 style="color:{% if totals.low_stock>0 %}#e94560{% else %}#00ff88{% endif %}">
+            <div class="number" style="color:{% if totals.low_stock>0 %}#e94560{% else %}#00ff88{% endif %}">
                 {{ totals.low_stock }}
             </div>
-            <div class="label">Low Stock Items</div>
+            <div class="label">Low Stock</div>
         </div>
     </div>
 </div>
@@ -81,93 +65,69 @@
         <h3>🏆 Best Performing Branch This Month</h3>
     </div>
     <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;">
-        <div style="font-size:2rem">🏬</div>
+        <div style="font-size:2.5rem">🏬</div>
         <div style="flex:1">
-            <div style="font-size:1.2rem;font-weight:700;color:#f39c12">
-                {{ best.branch.name }}
-            </div>
+            <div style="font-size:1.3rem;font-weight:700;color:#f39c12">{{ best.branch.name }}</div>
             <div style="color:#888;font-size:0.85rem">{{ best.branch.location }}</div>
         </div>
-        <div style="display:flex;gap:20px;">
-            <div style="text-align:center;">
-                <div style="font-size:1.3rem;font-weight:700;color:#00ff88">
-                    TZS {{ "{:,.0f}".format(best.month_revenue) }}
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            {% for label,value,color in [
+                ('Revenue',     best.month_revenue,  '#f39c12'),
+                ('Transactions',best.month_txns,     '#4a9eff'),
+                ('Net Profit',  best.net_profit,     '#00ff88' if best.net_profit>=0 else '#e94560')
+            ] %}
+            <div style="text-align:center;padding:0 16px;border-right:1px solid #1e1e3a;">
+                <div style="font-size:1.2rem;font-weight:700;color:{{ color }}">
+                    {% if label=='Transactions' %}{{ value }}{% else %}TZS {{ "{:,.0f}".format(value) }}{% endif %}
                 </div>
-                <div style="color:#888;font-size:0.72rem;text-transform:uppercase">Revenue</div>
+                <div style="color:#888;font-size:0.72rem;text-transform:uppercase">{{ label }}</div>
             </div>
-            <div style="text-align:center;">
-                <div style="font-size:1.3rem;font-weight:700;color:#4a9eff">
-                    {{ best.month_txns }}
-                </div>
-                <div style="color:#888;font-size:0.72rem;text-transform:uppercase">Transactions</div>
-            </div>
-            <div style="text-align:center;">
-                <div style="font-size:1.3rem;font-weight:700;
-                            color:{% if best.net_profit>=0 %}#00ff88{% else %}#e94560{% endif %}">
-                    TZS {{ "{:,.0f}".format(best.net_profit) }}
-                </div>
-                <div style="color:#888;font-size:0.72rem;text-transform:uppercase">Net Profit</div>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
 {% endif %}
 
-<!-- Branch by branch cards -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:20px;">
+<!-- Branch cards -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;">
     {% for bs in branch_stats %}
     <div class="card" style="border-color:{% if bs.net_profit>=0 %}#2a5a2a{% else %}#5a2a2a{% endif %}">
         <div class="card-header">
             <h3>🏬 {{ bs.branch.name }}</h3>
-            <span style="color:#888;font-size:0.78rem">{{ bs.branch.location }}</span>
+            <span class="badge badge-{% if bs.net_profit>=0 %}success{% else %}danger{% endif %}">
+                {% if bs.net_profit>=0 %}Profitable{% else %}Loss{% endif %}
+            </span>
         </div>
         <table style="font-size:0.82rem;">
-            <tr>
-                <td style="color:#888;padding:5px 0">Today's Revenue</td>
-                <td style="color:#f39c12;font-weight:bold;text-align:right">
-                    TZS {{ "{:,.0f}".format(bs.today_revenue) }}
-                </td>
-            </tr>
-            <tr>
-                <td style="color:#888;padding:5px 0">Month Revenue</td>
-                <td style="color:#00ff88;text-align:right">
-                    TZS {{ "{:,.0f}".format(bs.month_revenue) }}
-                </td>
-            </tr>
-            <tr>
-                <td style="color:#888;padding:5px 0">Month Expenses</td>
-                <td style="color:#e94560;text-align:right">
-                    TZS {{ "{:,.0f}".format(bs.month_expenses) }}
-                </td>
-            </tr>
-            <tr>
-                <td style="color:#888;padding:5px 0">Net Profit</td>
+            <tr><td style="color:#888;padding:5px 0">Today's Revenue</td>
+                <td style="color:#f39c12;font-weight:bold;text-align:right">TZS {{ "{:,.0f}".format(bs.today_revenue) }}</td></tr>
+            <tr><td style="color:#888;padding:5px 0">Today's Transactions</td>
+                <td style="color:#4a9eff;text-align:right">{{ bs.today_txns }}</td></tr>
+            <tr><td style="color:#888;padding:5px 0">Month Revenue</td>
+                <td style="color:#00ff88;text-align:right">TZS {{ "{:,.0f}".format(bs.month_revenue) }}</td></tr>
+            <tr><td style="color:#888;padding:5px 0">Month Expenses</td>
+                <td style="color:#e94560;text-align:right">TZS {{ "{:,.0f}".format(bs.month_expenses) }}</td></tr>
+            <tr style="border-top:1px solid #1e1e3a">
+                <td style="padding:5px 0;font-weight:bold">Net Profit</td>
                 <td style="color:{% if bs.net_profit>=0 %}#00ff88{% else %}#e94560{% endif %};font-weight:bold;text-align:right">
                     TZS {{ "{:,.0f}".format(bs.net_profit) }}
                 </td>
             </tr>
-            <tr>
-                <td style="color:#888;padding:5px 0">Staff</td>
-                <td style="text-align:right">{{ bs.staff_count }}</td>
-            </tr>
-            <tr>
-                <td style="color:#888;padding:5px 0">Low Stock Items</td>
-                <td style="color:{% if bs.low_stock>0 %}#e94560{% else %}#00ff88{% endif %};text-align:right">
-                    {{ bs.low_stock }}
-                </td>
-            </tr>
+            <tr><td style="color:#888;padding:5px 0">Staff</td>
+                <td style="text-align:right">{{ bs.staff_count }}</td></tr>
+            <tr><td style="color:#888;padding:5px 0">Low Stock Items</td>
+                <td style="color:{% if bs.low_stock>0 %}#e94560{% else %}#00ff88{% endif %};text-align:right">{{ bs.low_stock }}</td></tr>
         </table>
-        <div style="margin-top:10px;display:flex;gap:6px;">
-            <a href="/reports?period=monthly"
-               class="btn btn-secondary btn-sm">View Report</a>
-            <a href="/stock"
-               class="btn btn-secondary btn-sm">View Stock</a>
+        <div style="margin-top:12px;display:flex;gap:6px;">
+            <a href="/reports?period=monthly" class="btn btn-secondary btn-sm">Report</a>
+            <a href="/stock" class="btn btn-secondary btn-sm">Stock</a>
+            <a href="/staff" class="btn btn-secondary btn-sm">Staff</a>
         </div>
     </div>
     {% endfor %}
 </div>
 
-<!-- Weekly trend chart -->
+<!-- Charts -->
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
     <div class="card">
         <div class="card-header"><h3>Weekly Sales Trend — All Branches</h3></div>
@@ -179,7 +139,7 @@
     </div>
 </div>
 
-<!-- Outstanding debtors -->
+<!-- Debtors -->
 {% if debtors %}
 <div class="card">
     <div class="card-header">
@@ -188,7 +148,7 @@
     </div>
     <table>
         <thead>
-            <tr><th>Customer</th><th>Phone</th><th>Branch</th><th>Balance Owed</th><th>Limit</th></tr>
+            <tr><th>Customer</th><th>Phone</th><th>Branch</th><th>Balance Owed</th><th>Credit Limit</th></tr>
         </thead>
         <tbody>
             {% for d in debtors %}
@@ -196,14 +156,8 @@
                 <td><strong>{{ d.full_name }}</strong></td>
                 <td style="color:#888">{{ d.phone or '—' }}</td>
                 <td>{{ d.branch_name }}</td>
-                <td style="color:#e94560;font-weight:bold">
-                    TZS {{ "{:,.0f}".format(d.debit_balance) }}
-                </td>
-                <td style="color:#888">
-                    {% if d.debit_limit > 0 %}
-                    TZS {{ "{:,.0f}".format(d.debit_limit) }}
-                    {% else %}No limit{% endif %}
-                </td>
+                <td style="color:#e94560;font-weight:bold">TZS {{ "{:,.0f}".format(d.debit_balance) }}</td>
+                <td style="color:#888">{% if d.debit_limit>0 %}TZS {{ "{:,.0f}".format(d.debit_limit) }}{% else %}No limit{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -215,62 +169,41 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
-// Weekly trend
-const weekly = {{ weekly | tojson }};
-const days   = [...new Set(weekly.map(w => w.day))];
-const bnames = [...new Set(weekly.map(w => w.branch_name))];
-const colors = ['#f39c12','#4a9eff','#00ff88','#e94560','#9b59b6'];
+const weekly = {{ weekly|tojson }};
+const days   = [...new Set(weekly.map(w=>w.day))];
+const bnames = [...new Set(weekly.map(w=>w.branch_name))];
+const colors = ['#f39c12','#4a9eff','#00ff88','#e94560','#9b59b6','#1abc9c'];
 
-new Chart(document.getElementById('weeklyChart'), {
-    type: 'line',
-    data: {
-        labels: days,
-        datasets: bnames.map((name, i) => ({
-            label: name,
-            data:  days.map(d => {
-                const r = weekly.find(w => w.day===d && w.branch_name===name);
-                return r ? r.total : 0;
-            }),
-            borderColor: colors[i % colors.length],
-            backgroundColor: colors[i % colors.length] + '22',
-            tension: .4, fill: false, pointRadius: 3
-        }))
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: {
-                display: true,
-                labels: { color:'#888', font:{size:11} }
-            }
-        },
-        scales: {
-            x: { grid:{color:'#1e1e3a'}, ticks:{color:'#888'} },
-            y: { grid:{color:'#1e1e3a'}, ticks:{color:'#888'}, beginAtZero:true }
-        }
-    }
-});
+if(days.length){
+    new Chart(document.getElementById('weeklyChart'),{
+        type:'line',
+        data:{labels:days,
+              datasets:bnames.map((name,i)=>({
+                  label:name,
+                  data:days.map(d=>{
+                      const r=weekly.find(w=>w.day===d&&w.branch_name===name);
+                      return r?r.total:0;
+                  }),
+                  borderColor:colors[i%colors.length],
+                  backgroundColor:colors[i%colors.length]+'22',
+                  tension:.4,fill:false,pointRadius:3
+              }))},
+        options:{responsive:true,
+                 plugins:{legend:{display:true,labels:{color:'#888',font:{size:11}}}},
+                 scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#888'}},
+                         y:{grid:{color:'#1e1e3a'},ticks:{color:'#888'},beginAtZero:true}}}
+    });
+}
 
-// Branch comparison
-fetch('/api/branch_chart').then(r=>r.json()).then(data => {
-    new Chart(document.getElementById('branchChart'), {
-        type: 'bar',
-        data: {
-            labels: data.map(d => d.name),
-            datasets: [{
-                data:            data.map(d => d.revenue),
-                backgroundColor: colors,
-                borderRadius:    6
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend:{display:false} },
-            scales: {
-                x: { grid:{color:'#1e1e3a'}, ticks:{color:'#888'} },
-                y: { grid:{color:'#1e1e3a'}, ticks:{color:'#888'}, beginAtZero:true }
-            }
-        }
+fetch('/api/branch_chart').then(r=>r.json()).then(data=>{
+    new Chart(document.getElementById('branchChart'),{
+        type:'bar',
+        data:{labels:data.map(d=>d.name),
+              datasets:[{data:data.map(d=>d.revenue),
+                         backgroundColor:colors,borderRadius:6}]},
+        options:{responsive:true,plugins:{legend:{display:false}},
+                 scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#888'}},
+                         y:{grid:{color:'#1e1e3a'},ticks:{color:'#888'},beginAtZero:true}}}
     });
 });
 </script>

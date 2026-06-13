@@ -1,8 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Stock — Noddy Store{% endblock %}
+
 {% block content %}
 <div class="page-header">
-    <div><h2>Stock Management</h2><p>Monitor and manage your inventory</p></div>
+    <div>
+        <h2>Stock Management</h2>
+        <p>Monitor and manage your inventory</p>
+    </div>
     <a href="/products/add" class="btn btn-primary" style="display:none">+ Add Product</a>
 </div>
 
@@ -15,6 +19,7 @@
             <div class="label">Total Products</div>
         </div>
     </div>
+
     <div class="stat-card">
         <div class="stat-icon" style="background:{% if low_stock %}#2a0d0d{% else %}#0d2a1a{% endif %}">⚠</div>
         <div class="stat-info">
@@ -24,6 +29,7 @@
             <div class="label">Low Stock Items</div>
         </div>
     </div>
+
     <div class="stat-card">
         <div class="stat-icon" style="background:#1a2a00">🏆</div>
         <div class="stat-info">
@@ -38,11 +44,15 @@
     <div class="card-header">
         <h3 style="color:#e94560">⚠ Low Stock Alert — {{ low_stock|length }} items need restocking</h3>
     </div>
+
     <table>
         <thead>
-            <tr><th>Product</th><th>Category</th><th>Branch</th>
-                <th>Current</th><th>Minimum</th><th>Action</th></tr>
+            <tr>
+                <th>Product</th><th>Category</th><th>Branch</th>
+                <th>Current</th><th>Minimum</th><th>Action</th>
+            </tr>
         </thead>
+
         <tbody>
             {% for p in low_stock %}
             <tr>
@@ -65,27 +75,49 @@
 {% endif %}
 
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+
     <!-- Top selling -->
     <div class="card">
-        <div class="card-header"><h3>🏆 Top Selling Products</h3></div>
+        <div class="card-header">
+            <h3>🏆 Top Selling Products</h3>
+        </div>
+
         <table>
             <thead>
-                <tr><th>Rank</th><th>Product</th><th>Category</th>
-                    <th>Qty Sold</th><th>Revenue</th></tr>
-            </thead>
-            <tbody>
-                {% for i,p in top_selling|enumerate %}
                 <tr>
-                    <td style="color:{% if i==0 %}#f39c12{% elif i==1 %}#aaa{% elif i==2 %}#cd7f32{% else %}#555{% endif %};font-weight:bold">
-                        #{{ i+1 }}
+                    <th>Rank</th>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th>Qty Sold</th>
+                    <th>Revenue</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for p in top_selling %}
+                <tr>
+                    <td style="color:{% if loop.index0==0 %}#f39c12
+                                    {% elif loop.index0==1 %}#aaa
+                                    {% elif loop.index0==2 %}#cd7f32
+                                    {% else %}#555{% endif %};
+                               font-weight:bold">
+                        #{{ loop.index }}
                     </td>
+
                     <td><strong>{{ p.name }}</strong></td>
                     <td>{{ p.cat_name or '—' }}</td>
                     <td><span class="badge badge-success">{{ p.total_sold }} units</span></td>
-                    <td style="color:#f39c12">TZS {{ "{:,.0f}".format(p.total_revenue) }}</td>
+                    <td style="color:#f39c12">
+                        TZS {{ "{:,.0f}".format(p.total_revenue) }}
+                    </td>
                 </tr>
+
                 {% else %}
-                <tr><td colspan="5" style="text-align:center;color:#555;padding:20px">No sales yet</td></tr>
+                <tr>
+                    <td colspan="5" style="text-align:center;color:#555;padding:20px">
+                        No sales yet
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -94,36 +126,48 @@
     <!-- Transfer -->
     <div class="card">
         <div class="card-header"><h3>↔ Transfer Stock</h3></div>
+
         <form method="POST" action="/stock/transfer">
+
             <div class="form-group">
                 <label>Product</label>
-                <select name="product_id" required style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                <select name="product_id" required
+                        style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
                     {% for p in all_stock %}
                     <option value="{{ p.id }}">{{ p.name }} ({{ p.stock_qty }})</option>
                     {% endfor %}
                 </select>
             </div>
+
             <div class="form-group">
                 <label>From Branch</label>
-                <select name="from_branch" required style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                <select name="from_branch" required
+                        style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;">
                     {% for b in branches %}
                     <option value="{{ b.id }}">{{ b.name }}</option>
                     {% endfor %}
                 </select>
             </div>
+
             <div class="form-group">
                 <label>To Branch</label>
-                <select name="to_branch" required style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                <select name="to_branch" required
+                        style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;">
                     {% for b in branches %}
                     <option value="{{ b.id }}">{{ b.name }}</option>
                     {% endfor %}
                 </select>
             </div>
+
             <div class="form-group">
                 <label>Quantity</label>
-                <input type="number" name="quantity" min="1" required style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+                <input type="number" name="quantity" min="1" required
+                       style="width:100%;padding:8px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;">
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">Transfer</button>
+
+            <button type="submit" class="btn btn-primary" style="width:100%">
+                Transfer
+            </button>
         </form>
     </div>
 </div>
@@ -134,33 +178,45 @@
         <h3>All Stock ({{ all_stock|length }} products)</h3>
         <a href="/products" class="btn btn-secondary btn-sm">Manage Products</a>
     </div>
+
     <div style="overflow-x:auto;">
         <table>
             <thead>
-                <tr><th>Product</th><th>Dept</th><th>Category</th><th>Branch</th>
-                    <th>Stock</th><th>Min</th><th>Buy Price</th><th>Sell Price</th>
-                    <th>Margin</th><th>Adjust</th></tr>
+                <tr>
+                    <th>Product</th><th>Dept</th><th>Category</th><th>Branch</th>
+                    <th>Stock</th><th>Min</th><th>Buy Price</th>
+                    <th>Sell Price</th><th>Margin</th><th>Adjust</th>
+                </tr>
             </thead>
+
             <tbody>
                 {% for p in all_stock %}
                 {% set margin = ((p.selling_price - p.buying_price)/p.selling_price*100) if p.selling_price > 0 else 0 %}
+
                 <tr>
                     <td><strong>{{ p.name }}</strong></td>
                     <td style="color:#888">{{ p.dept_name or '—' }}</td>
                     <td><span class="badge badge-info">{{ p.cat_name or '—' }}</span></td>
                     <td>{{ p.branch_name }}</td>
+
                     <td>
                         <span class="badge badge-{% if p.stock_qty<=p.min_stock %}danger
-                            {% elif p.stock_qty<=p.min_stock*2 %}warning{% else %}success{% endif %}">
+                                              {% elif p.stock_qty<=p.min_stock*2 %}warning
+                                              {% else %}success{% endif %}">
                             {{ p.stock_qty }} {{ p.unit }}
                         </span>
                     </td>
+
                     <td style="color:#888">{{ p.min_stock }}</td>
                     <td>TZS {{ "{:,.0f}".format(p.buying_price) }}</td>
                     <td style="color:#f39c12">TZS {{ "{:,.0f}".format(p.selling_price) }}</td>
-                    <td style="color:{% if margin>=20 %}#00ff88{% elif margin>=10 %}#f39c12{% else %}#e94560{% endif %}">
+
+                    <td style="color:{% if margin>=20 %}#00ff88
+                                    {% elif margin>=10 %}#f39c12
+                                    {% else %}#e94560{% endif %}">
                         {{ "{:.1f}".format(margin) }}%
                     </td>
+
                     <td>
                         <button class="btn btn-secondary btn-sm"
                                 onclick="openAdjust({{ p.id }},'{{ p.name }}',{{ p.stock_qty }})">
@@ -168,6 +224,7 @@
                         </button>
                     </td>
                 </tr>
+
                 {% endfor %}
             </tbody>
         </table>
@@ -179,32 +236,41 @@
     <div class="modal">
         <h2>Adjust Stock</h2>
         <p id="adjust-product-name" style="color:#888;margin-bottom:16px;font-size:0.85rem"></p>
+
         <form method="POST" id="adjustForm">
             <div class="form-group">
                 <label>Action</label>
-                <select name="mode" style="width:100%;padding:9px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;">
+                <select name="mode">
                     <option value="add">Add Stock (Restock)</option>
                     <option value="remove">Remove Stock</option>
                 </select>
             </div>
+
             <div class="form-group">
                 <label>Quantity</label>
-                <input type="number" name="qty" min="1" required style="width:100%;padding:9px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+                <input type="number" name="qty" min="1" required>
             </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary"
-                    onclick="document.getElementById('adjustModal').classList.remove('show')">Cancel</button>
-                <button type="submit" class="btn btn-primary">Update Stock</button>
+                        onclick="document.getElementById('adjustModal').classList.remove('show')">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    Update Stock
+                </button>
             </div>
         </form>
     </div>
 </div>
+
 {% endblock %}
+
 {% block extra_js %}
 <script>
 function openAdjust(id,name,current){
-    document.getElementById('adjustForm').action=`/stock/adjust/${id}`;
-    document.getElementById('adjust-product-name').textContent=
+    document.getElementById('adjustForm').action = `/stock/adjust/${id}`;
+    document.getElementById('adjust-product-name').textContent =
         `Product: ${name} | Current stock: ${current}`;
     document.getElementById('adjustModal').classList.add('show');
 }

@@ -8,43 +8,44 @@
         *{margin:0;padding:0;box-sizing:border-box;}
         body{background:#0f0f1a;color:#fff;font-family:'Segoe UI',sans-serif;display:flex;min-height:100vh;}
         .sidebar{width:220px;background:#13132a;border-right:1px solid #1e1e3a;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100;overflow-y:auto;}
-        .sidebar-logo{padding:20px 16px;border-bottom:1px solid #1e1e3a;}
+        .sidebar-logo{padding:20px 16px;border-bottom:1px solid #1e1e3a;flex-shrink:0;}
         .sidebar-logo h1{font-size:1.2rem;color:#fff;}
         .sidebar-logo h1 span{color:#f39c12;}
         .sidebar-logo p{color:#555;font-size:0.72rem;margin-top:3px;}
-        .nav-section{padding:12px 0 4px 16px;font-size:0.68rem;color:#444;text-transform:uppercase;letter-spacing:1px;}
-        .nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;color:#888;text-decoration:none;font-size:0.85rem;border-left:3px solid transparent;transition:all .2s;}
-        .nav-item:hover{color:#fff;background:#1a1a3a;}
+        .nav-section{padding:10px 0 3px 16px;font-size:0.66rem;color:#444;text-transform:uppercase;letter-spacing:1px;}
+        .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:#888;text-decoration:none;font-size:0.83rem;border-left:3px solid transparent;transition:all .15s;}
+        .nav-item:hover{color:#fff;background:#1a1a3a;border-left-color:#555;}
         .nav-item.active{color:#fff;background:#1a1a3a;border-left-color:#f39c12;}
-        .nav-item .icon{font-size:1rem;width:18px;text-align:center;}
-        .sidebar-user{padding:14px 16px;border-top:1px solid #1e1e3a;margin-top:auto;}
-        .user-avatar{width:34px;height:34px;background:#f39c12;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.85rem;color:#000;}
+        .nav-item .icon{font-size:0.95rem;width:18px;text-align:center;flex-shrink:0;}
+        .sidebar-user{padding:14px 16px;border-top:1px solid #1e1e3a;flex-shrink:0;}
+        .user-avatar{width:34px;height:34px;background:#f39c12;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:0.85rem;color:#000;flex-shrink:0;}
         .user-name{font-size:0.82rem;color:#fff;font-weight:500;}
         .user-role{font-size:0.7rem;color:#888;text-transform:capitalize;}
         .btn-logout{margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid #2a2a4a;border-radius:6px;color:#888;cursor:pointer;font-size:0.78rem;}
         .btn-logout:hover{border-color:#f39c12;color:#f39c12;}
-        .main{margin-left:220px;flex:1;padding:20px;overflow-y:auto;}
-        .page-header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;}
+        .main{margin-left:220px;flex:1;padding:20px;overflow-y:auto;min-height:100vh;}
+        .page-header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;}
         .page-header h2{font-size:1.5rem;font-weight:600;}
         .page-header p{color:#888;font-size:0.85rem;margin-top:3px;}
         .card{background:#13132a;border-radius:12px;border:1px solid #1e1e3a;padding:20px;margin-bottom:16px;}
         .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e1e3a;}
         .card-header h3{font-size:0.95rem;color:#ccc;}
-        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
-        .stat-card{background:#13132a;border-radius:12px;padding:18px;border:1px solid #1e1e3a;display:flex;align-items:center;gap:14px;}
-        .stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
-        .stat-info .number{font-size:1.6rem;font-weight:700;}
-        .stat-info .label{color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+        .stat-card{background:#13132a;border-radius:12px;padding:16px;border:1px solid #1e1e3a;display:flex;align-items:center;gap:12px;}
+        .stat-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
+        .stat-info .number{font-size:1.5rem;font-weight:700;}
+        .stat-info .label{color:#888;font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
         table{width:100%;border-collapse:collapse;}
-        th,td{padding:10px 14px;text-align:left;font-size:0.82rem;border-bottom:1px solid #1e1e3a;}
-        th{color:#888;text-transform:uppercase;font-size:0.7rem;letter-spacing:.5px;}
+        th,td{padding:9px 12px;text-align:left;font-size:0.82rem;border-bottom:1px solid #1e1e3a;}
+        th{color:#888;text-transform:uppercase;font-size:0.7rem;letter-spacing:.5px;background:#0f0f1a;}
         tr:hover td{background:#1a1a3a;}
-        .btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:500;text-decoration:none;display:inline-block;}
+        .btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:500;text-decoration:none;display:inline-block;transition:opacity .2s;}
+        .btn:hover{opacity:.85;}
         .btn-primary{background:#f39c12;color:#000;}
-        .btn-primary:hover{background:#e08e0b;}
         .btn-danger{background:#c0392b;color:#fff;}
         .btn-success{background:#27ae60;color:#fff;}
         .btn-secondary{background:#1e1e3a;color:#ccc;}
+        .btn-info{background:#2980b9;color:#fff;}
+        .btn-warning{background:#7d6608;color:#fff;}
         .btn-sm{padding:4px 10px;font-size:0.75rem;}
         .form-group{margin-bottom:14px;}
         .form-group label{display:block;color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
@@ -59,14 +60,18 @@
         .alert{padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;}
         .alert-success{background:#0d2a1a;border:1px solid #2a5a2a;color:#00ff88;}
         .alert-error{background:#2a0d0d;border:1px solid #5a2a2a;color:#ff6b6b;}
-        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;}
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;}
         .modal-overlay.show{display:flex;}
-        .modal{background:#13132a;border-radius:12px;padding:24px;width:480px;border:1px solid #2a2a4a;max-height:90vh;overflow-y:auto;}
+        .modal{background:#13132a;border-radius:12px;padding:24px;width:500px;border:1px solid #2a2a4a;max-height:90vh;overflow-y:auto;}
         .modal h2{font-size:1.1rem;margin-bottom:16px;color:#f39c12;}
         .modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
         ::-webkit-scrollbar{width:5px;}
         ::-webkit-scrollbar-track{background:#0f0f1a;}
         ::-webkit-scrollbar-thumb{background:#2a2a4a;border-radius:3px;}
+        .filter-bar{background:#13132a;border-radius:10px;border:1px solid #1e1e3a;padding:12px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+        .filter-bar input,.filter-bar select{padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;font-size:0.83rem;}
+        .filter-bar input:focus,.filter-bar select:focus{border-color:#f39c12;}
+        .filter-label{color:#888;font-size:0.72rem;text-transform:uppercase;margin-bottom:4px;display:block;}
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -76,7 +81,7 @@
         <h1>🏪 <span>Noddy</span> Store</h1>
         <p>Point of Sale System</p>
     </div>
-    <nav>
+    <nav style="flex:1;overflow-y:auto;">
         <div class="nav-section">Main</div>
         <a href="/" class="nav-item {% if request.path=='/' %}active{% endif %}">
             <span class="icon">⊞</span> Dashboard
@@ -84,47 +89,54 @@
         <a href="/pos" class="nav-item {% if request.path=='/pos' %}active{% endif %}">
             <span class="icon">🛒</span> POS Terminal
         </a>
+
         <div class="nav-section">Inventory</div>
-        <a href="/products" class="nav-item {% if '/products' in request.path %}active{% endif %}">
+        <a href="/products" class="nav-item {% if request.path.startswith('/products') %}active{% endif %}">
             <span class="icon">📦</span> Products
         </a>
-        <a href="/categories" class="nav-item {% if '/categories' in request.path %}active{% endif %}">
+        <a href="/stock" class="nav-item {% if request.path=='/stock' %}active{% endif %}">
+            <span class="icon">📊</span> Stock Levels
+        </a>
+        <a href="/categories" class="nav-item {% if request.path.startswith('/categories') %}active{% endif %}">
             <span class="icon">🗂</span> Categories
         </a>
-        <a href="/departments" class="nav-item {% if '/departments' in request.path %}active{% endif %}">
+        <a href="/departments" class="nav-item {% if request.path.startswith('/departments') %}active{% endif %}">
             <span class="icon">🏢</span> Departments
         </a>
-        <a href="/stock" class="nav-item {% if request.path=='/stock' %}active{% endif %}">
-            <span class="icon">📊</span> Stock
-        </a>
+
         <div class="nav-section">Sales</div>
         <a href="/sales" class="nav-item {% if request.path=='/sales' %}active{% endif %}">
             <span class="icon">💰</span> Sales History
         </a>
-        <a href="/customers" class="nav-item {% if '/customers' in request.path %}active{% endif %}">
+        <a href="/customers" class="nav-item {% if request.path.startswith('/customers') %}active{% endif %}">
             <span class="icon">👥</span> Customers
         </a>
-        <a href="/expenses" class="nav-item {% if '/expenses' in request.path %}active{% endif %}">
+        <a href="/expenses" class="nav-item {% if request.path.startswith('/expenses') %}active{% endif %}">
             <span class="icon">💸</span> Expenses
         </a>
+        <a href="/mobile_money" class="nav-item {% if request.path.startswith('/mobile_money') %}active{% endif %}">
+            <span class="icon">📱</span> Mobile Money
+        </a>
+
         <div class="nav-section">Reports</div>
         <a href="/reports" class="nav-item {% if request.path=='/reports' %}active{% endif %}">
-            <span class="icon">📈</span> Reports
+            <span class="icon">📈</span> Reports &amp; P&amp;L
         </a>
+
         <div class="nav-section">Management</div>
         <a href="/staff" class="nav-item {% if request.path=='/staff' %}active{% endif %}">
             <span class="icon">👤</span> Staff
         </a>
-        <a href="/staff/performance" class="nav-item {% if '/staff/performance' in request.path %}active{% endif %}">
+        <a href="/staff/performance" class="nav-item {% if request.path=='/staff/performance' %}active{% endif %}">
             <span class="icon">🏅</span> Performance
         </a>
-        <a href="/staff/attendance/report" class="nav-item {% if '/attendance' in request.path %}active{% endif %}">
+        <a href="/staff/attendance/report" class="nav-item {% if request.path=='/staff/attendance/report' %}active{% endif %}">
             <span class="icon">📅</span> Attendance
         </a>
         <a href="/branches" class="nav-item {% if request.path=='/branches' %}active{% endif %}">
             <span class="icon">🏬</span> Branches
         </a>
-        <a href="/branch/overview" class="nav-item {% if '/branch/overview' in request.path %}active{% endif %}">
+        <a href="/branch/overview" class="nav-item {% if request.path=='/branch/overview' %}active{% endif %}">
             <span class="icon">🌐</span> Branch Overview
         </a>
         {% if session.role == 'admin' %}
@@ -136,8 +148,10 @@
     <div class="sidebar-user">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
             <div class="user-avatar">{{ session.full_name[0]|upper }}</div>
-            <div>
-                <div class="user-name">{{ session.full_name }}</div>
+            <div style="min-width:0;">
+                <div class="user-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                    {{ session.full_name }}
+                </div>
                 <div class="user-role">{{ session.role }} · {{ session.branch_name }}</div>
             </div>
         </div>

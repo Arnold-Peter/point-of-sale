@@ -182,6 +182,25 @@ def init_db():
         FOREIGN KEY (to_branch)       REFERENCES branches(id),
         FOREIGN KEY (transferred_by)  REFERENCES users(id)
     )''')
+# Mobile money transactions
+    c.execute('''CREATE TABLE IF NOT EXISTS mobile_money_transactions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        branch_id    INTEGER,
+        provider     TEXT NOT NULL,
+        type         TEXT NOT NULL,
+        phone_number TEXT,
+        amount       REAL NOT NULL,
+        reference    TEXT,
+        description  TEXT,
+        recorded_by  INTEGER,
+        created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (branch_id)   REFERENCES branches(id),
+        FOREIGN KEY (recorded_by) REFERENCES users(id)
+    )''')
+
+
+
+
 
     conn.commit()
 

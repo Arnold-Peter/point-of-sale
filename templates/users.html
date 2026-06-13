@@ -2,19 +2,15 @@
 {% block title %}Users — Noddy Store{% endblock %}
 {% block content %}
 <div class="page-header">
-    <div><h2>User Management</h2><p>Manage system users and access levels</p></div>
-    <button class="btn btn-primary"
-            onclick="document.getElementById('addModal').classList.add('show')">
+    <div><h2>User Management</h2>
+    <p>Add, edit, delete users and manage passwords. All users can log in with their credentials.</p></div>
+    <button class="btn btn-primary" onclick="document.getElementById('addModal').classList.add('show')">
         + Add User
     </button>
 </div>
 
 <!-- Stats -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
-    {% set active_count = users|selectattr('active','eq',1)|list|length %}
-    {% set admin_count  = users|selectattr('role','eq','admin')|list|length %}
-    {% set mgr_count    = users|selectattr('role','eq','manager')|list|length %}
-    {% set cash_count   = users|selectattr('role','eq','cashier')|list|length %}
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
     <div class="stat-card">
         <div class="stat-icon" style="background:#0d1a2a">👥</div>
         <div class="stat-info">
@@ -25,43 +21,76 @@
     <div class="stat-card">
         <div class="stat-icon" style="background:#0d2a1a">✅</div>
         <div class="stat-info">
-            <div class="number" style="color:#00ff88">{{ active_count }}</div>
-            <div class="label">Active Users</div>
+            <div class="number" style="color:#00ff88">{{ users|selectattr('active','eq',1)|list|length }}</div>
+            <div class="label">Active</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon" style="background:#2a0d0d">🛡</div>
         <div class="stat-info">
-            <div class="number" style="color:#e94560">{{ admin_count }}</div>
+            <div class="number" style="color:#e94560">{{ users|selectattr('role','eq','admin')|list|length }}</div>
             <div class="label">Admins</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon" style="background:#2a1a00">💼</div>
         <div class="stat-info">
-            <div class="number" style="color:#f39c12">{{ mgr_count }}</div>
+            <div class="number" style="color:#f39c12">{{ users|selectattr('role','eq','manager')|list|length }}</div>
             <div class="label">Managers</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">🧾</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff">{{ users|selectattr('role','eq','cashier')|list|length }}</div>
+            <div class="label">Cashiers</div>
         </div>
     </div>
 </div>
 
+<!-- Change own password -->
+<div class="card" style="margin-bottom:16px;border-color:#2a2a4a;">
+    <div class="card-header">
+        <h3>🔐 Change My Password ({{ session.full_name }})</h3>
+    </div>
+    <form method="POST" action="/profile/change_password" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;flex:1;min-width:160px;">
+            <label>Current Password</label>
+            <input type="password" name="current_password" required placeholder="Enter current password"/>
+        </div>
+        <div class="form-group" style="margin:0;flex:1;min-width:160px;">
+            <label>New Password</label>
+            <input type="password" name="new_password" required placeholder="At least 4 characters"/>
+        </div>
+        <div class="form-group" style="margin:0;flex:1;min-width:160px;">
+            <label>Confirm New Password</label>
+            <input type="password" name="confirm_password" required placeholder="Repeat new password"/>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-bottom:14px;">Change Password</button>
+    </form>
+</div>
+
+<!-- All users -->
 <div class="card">
     <div class="card-header">
         <h3>All Users ({{ users|length }})</h3>
+        <span style="color:#888;font-size:0.78rem">Admin has full control over all users</span>
     </div>
     <table>
         <thead>
-            <tr><th>Full Name</th><th>Username</th><th>Role</th>
-                <th>Branch</th><th>Status</th><th>Created</th><th>Action</th></tr>
+            <tr>
+                <th>Full Name</th><th>Username</th><th>Role</th>
+                <th>Branch</th><th>Status</th><th>Created</th>
+                <th style="min-width:280px">Actions</th>
+            </tr>
         </thead>
         <tbody>
             {% for u in users %}
             <tr>
                 <td><strong>{{ u.full_name }}</strong></td>
-                <td style="color:#888">{{ u.username }}</td>
+                <td style="color:#888;font-family:monospace">{{ u.username }}</td>
                 <td>
-                    <span class="badge badge-{% if u.role=='admin' %}danger
-                        {% elif u.role=='manager' %}warning{% else %}info{% endif %}">
+                    <span class="badge badge-{% if u.role=='admin' %}danger{% elif u.role=='manager' %}warning{% else %}info{% endif %}">
                         {{ u.role }}
                     </span>
                 </td>
@@ -73,15 +102,35 @@
                 </td>
                 <td style="color:#888;font-size:0.78rem">{{ u.created_at[:10] if u.created_at else '—' }}</td>
                 <td>
-                    {% if u.username != 'admin' %}
-                    <form method="POST" action="/users/toggle/{{ u.id }}" style="display:inline">
-                        <button class="btn btn-secondary btn-sm">
-                            {% if u.active %}Deactivate{% else %}Activate{% endif %}
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <!-- Edit button -->
+                        <button class="btn btn-secondary btn-sm"
+                                onclick="openEdit({{ u.id }},'{{ u.full_name }}','{{ u.username }}','{{ u.role }}',{{ u.branch_id or 0 }})">
+                            ✏ Edit
                         </button>
-                    </form>
-                    {% else %}
-                    <span style="color:#555;font-size:0.75rem">Protected</span>
-                    {% endif %}
+                        <!-- Change password button -->
+                        <button class="btn btn-info btn-sm"
+                                onclick="openChangePw({{ u.id }},'{{ u.full_name }}')">
+                            🔑 Password
+                        </button>
+                        {% if u.username != 'admin' %}
+                        <!-- Toggle active -->
+                        <form method="POST" action="/users/toggle/{{ u.id }}" style="display:inline">
+                            <button class="btn btn-sm {% if u.active %}btn-warning{% else %}btn-success{% endif %}"
+                                    style="{% if u.active %}background:#7d6608;color:#fff;{% endif %}">
+                                {% if u.active %}🚫 Disable{% else %}✅ Enable{% endif %}
+                            </button>
+                        </form>
+                        <!-- Delete button -->
+                        <form method="POST" action="/users/delete/{{ u.id }}"
+                              onsubmit="return confirm('Permanently delete {{ u.full_name }}? This cannot be undone!')"
+                              style="display:inline">
+                            <button class="btn btn-danger btn-sm">🗑 Delete</button>
+                        </form>
+                        {% else %}
+                        <span style="color:#555;font-size:0.75rem;padding:4px 6px">Protected</span>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% endfor %}
@@ -92,27 +141,30 @@
 <!-- Add User Modal -->
 <div class="modal-overlay" id="addModal">
     <div class="modal">
-        <h2>Add New User</h2>
+        <h2>➕ Add New User</h2>
+        <p style="color:#888;font-size:0.82rem;margin-bottom:16px;">
+            The user will be able to log in immediately with these credentials.
+        </p>
         <form method="POST" action="/users/add">
             <div class="form-grid">
                 <div class="form-group">
                     <label>Full Name *</label>
-                    <input type="text" name="full_name" required/>
+                    <input type="text" name="full_name" required placeholder="e.g. John Doe"/>
                 </div>
                 <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" name="username" required/>
+                    <label>Username * (used to log in)</label>
+                    <input type="text" name="username" required placeholder="e.g. johndoe"/>
                 </div>
                 <div class="form-group">
                     <label>Password *</label>
-                    <input type="password" name="password" required/>
+                    <input type="password" name="password" required placeholder="At least 4 characters"/>
                 </div>
                 <div class="form-group">
                     <label>Role *</label>
                     <select name="role">
-                        <option value="cashier">Cashier</option>
-                        <option value="manager">Manager</option>
-                        <option value="admin">Admin</option>
+                        <option value="cashier">Cashier (limited access)</option>
+                        <option value="manager">Manager (branch access)</option>
+                        <option value="admin">Admin (full access)</option>
                     </select>
                 </div>
             </div>
@@ -124,6 +176,9 @@
                     {% endfor %}
                 </select>
             </div>
+            <div style="background:#0d2a1a;border:1px solid #2a5a2a;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:#00ff88;">
+                ✅ After adding, this user can immediately log in at the login page using the username and password you set here.
+            </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary"
                     onclick="document.getElementById('addModal').classList.remove('show')">Cancel</button>
@@ -132,4 +187,94 @@
         </form>
     </div>
 </div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <h2>✏ Edit User</h2>
+        <form method="POST" id="editForm">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" name="full_name" id="edit-fullname" required/>
+                </div>
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" name="username" id="edit-username" required/>
+                </div>
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select name="role" id="edit-role">
+                        <option value="cashier">Cashier</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Branch *</label>
+                    <select name="branch_id" id="edit-branch">
+                        {% for b in branches %}
+                        <option value="{{ b.id }}">{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('editModal').classList.remove('show')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Change Password Modal (Admin changing someone else's password) -->
+<div class="modal-overlay" id="changePwModal">
+    <div class="modal">
+        <h2>🔑 Change Password</h2>
+        <p id="changepw-name" style="color:#888;font-size:0.85rem;margin-bottom:16px;"></p>
+        <form method="POST" id="changePwForm">
+            <div class="form-group">
+                <label>New Password *</label>
+                <input type="password" name="new_password" id="new-password"
+                       required placeholder="Enter new password (min 4 characters)"/>
+            </div>
+            <div class="form-group">
+                <label>Confirm New Password *</label>
+                <input type="password" name="confirm_password" id="confirm-password"
+                       required placeholder="Repeat new password"/>
+            </div>
+            <div style="background:#2a1a00;border:1px solid #5a3a00;border-radius:8px;
+                        padding:10px 14px;margin-bottom:12px;font-size:0.82rem;color:#f39c12;">
+                ⚠ The user will need to use this new password to log in next time.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary"
+                    onclick="document.getElementById('changePwModal').classList.remove('show')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Change Password</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openEdit(id, fullname, username, role, branchId) {
+    document.getElementById('editForm').action = `/users/edit/${id}`;
+    document.getElementById('edit-fullname').value  = fullname;
+    document.getElementById('edit-username').value  = username;
+    document.getElementById('edit-role').value      = role;
+    document.getElementById('edit-branch').value    = branchId;
+    document.getElementById('editModal').classList.add('show');
+}
+
+function openChangePw(id, name) {
+    document.getElementById('changePwForm').action = `/users/change_password/${id}`;
+    document.getElementById('changepw-name').textContent = `Changing password for: ${name}`;
+    document.getElementById('new-password').value     = '';
+    document.getElementById('confirm-password').value = '';
+    document.getElementById('changePwModal').classList.add('show');
+}
+</script>
 {% endblock %}

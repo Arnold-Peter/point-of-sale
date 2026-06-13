@@ -1,249 +1,297 @@
 {% extends 'base.html' %}
 {% block title %}Reports — Noddy Store{% endblock %}
+
 {% block content %}
 <div class="page-header">
-    <div><h2>Reports & Analytics</h2><p>Financial performance overview</p></div>
+    <div>
+        <h2>Reports & Analytics</h2>
+        <p>Full financial performance overview with P&L</p>
+    </div>
+
     <a href="/reports/pdf?period={{ period }}&from={{ date_from }}&to={{ date_to }}"
-       class="btn btn-primary">Export PDF</a>
+       class="btn btn-primary" target="_blank">📄 Export PDF</a>
 </div>
 
 <!-- Period selector -->
-<div class="card" style="padding:12px 20px;margin-bottom:16px;">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="color:#888;font-size:0.82rem;">Period:</span>
-        {% for p,label in [('daily','Today'),('weekly','This Week'),('monthly','This Month'),('yearly','This Year')] %}
-        <a href="/reports?period={{ p }}"
-           class="btn btn-sm {% if period==p %}btn-primary{% else %}btn-secondary{% endif %}">
-            {{ label }}
-        </a>
-        {% endfor %}
-        <span style="color:#555;font-size:0.78rem;margin-left:8px;">
-            {{ date_from }} → {{ date_to }}
-        </span>
-    </div>
+<div class="filter-bar" style="margin-bottom:16px;">
+    <span style="color:#888;font-size:0.82rem;font-weight:500;">Period:</span>
+
+    {% for p,label in [('daily','Today'),('weekly','This Week'),('monthly','This Month'),('yearly','This Year')] %}
+    <a href="/reports?period={{ p }}"
+       class="btn btn-sm {% if period==p %}btn-primary{% else %}btn-secondary{% endif %}">
+        {{ label }}
+    </a>
+    {% endfor %}
+
+    <span style="color:#555;font-size:0.78rem;margin-left:4px;">
+        {{ date_from }} → {{ date_to }}
+    </span>
+
+    <span style="color:#888;font-size:0.78rem;margin-left:8px;">
+        {{ transactions }} transactions
+    </span>
 </div>
 
 <!-- P&L Cards -->
-<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px;">
-    <div class="stat-card">
-        <div class="stat-icon" style="background:#2a1a00">💰</div>
-        <div class="stat-info">
-            <div class="number" style="color:#f39c12;font-size:1rem">TZS {{ "{:,.0f}".format(revenue) }}</div>
-            <div class="label">Revenue</div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;">
+
+    {% for label,value,color,bg in [
+        ('Revenue', revenue, '#f39c12','#1a1000'),
+        ('Cost of Goods', cost, '#9b59b6','#0d0514'),
+        ('Gross Profit', gross_profit, '#00ff88','#001a0d'),
+        ('Expenses', total_expenses,'#e94560','#1a0000'),
+        ('Net Profit', net_profit,
+            '#00ff88' if net_profit>=0 else '#e94560',
+            '#001a0d' if net_profit>=0 else '#1a0000')
+    ] %}
+
+    <div class="stat-card" style="background:{{ bg }};padding:14px;">
+        <div style="font-size:0.68rem;color:#888;text-transform:uppercase;">
+            {{ label }}
         </div>
+
+        <div style="font-size:1rem;font-weight:700;color:{{ color }}">
+            TZS {{ "{:,.0f}".format(value) }}
+        </div>
+
+        {% if revenue>0 and label!='Revenue' %}
+        <div style="font-size:0.65rem;color:#555;">
+            {{ "{:.1f}".format(value/revenue*100) }}% of revenue
+        </div>
+        {% endif %}
     </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background:#1a0d2a">📦</div>
-        <div class="stat-info">
-            <div class="number" style="color:#9b59b6;font-size:1rem">TZS {{ "{:,.0f}".format(cost) }}</div>
-            <div class="label">Cost of Goods</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background:#0d2a1a">📈</div>
-        <div class="stat-info">
-            <div class="number" style="color:#00ff88;font-size:1rem">TZS {{ "{:,.0f}".format(gross_profit) }}</div>
-            <div class="label">Gross Profit</div>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon" style="background:#2a0d0d">💸</div>
-        <div class="stat-info">
-            <div class="number" style="color:#e94560;font-size:1rem">TZS {{ "{:,.0f}".format(total_expenses) }}</div>
-            <div class="label">Expenses</div>
-        </div>
-    </div>
-    <div class="stat-card"
-         style="border-color:{% if net_profit>=0 %}#27ae60{% else %}#c0392b{% endif %}">
-        <div class="stat-icon"
-             style="background:{% if net_profit>=0 %}#0d2a1a{% else %}#2a0d0d{% endif %}">
-            {% if net_profit>=0 %}✅{% else %}❌{% endif %}
-        </div>
-        <div class="stat-info">
-            <div class="number"
-                 style="color:{% if net_profit>=0 %}#00ff88{% else %}#e94560{% endif %};font-size:1rem">
-                TZS {{ "{:,.0f}".format(net_profit) }}
-            </div>
-            <div class="label">Net Profit</div>
-        </div>
-    </div>
+
+    {% endfor %}
 </div>
 
-<!-- P&L Table -->
-<div class="card" style="margin-bottom:16px;">
-    <div class="card-header"><h3>Profit & Loss Statement</h3></div>
+<!-- P&L TABLE -->
+<div class="card">
+    <div class="card-header">
+        <h3>Profit & Loss Statement — {{ date_from }} to {{ date_to }}</h3>
+    </div>
+
     <table>
         <tbody>
-            <tr><td style="color:#888;width:60%">Total Revenue</td>
-                <td style="color:#f39c12;font-weight:bold">TZS {{ "{:,.0f}".format(revenue) }}</td>
-                <td style="color:#888">{{ transactions }} transactions</td></tr>
-            <tr><td style="color:#888">Cost of Goods Sold</td>
-                <td style="color:#9b59b6">TZS {{ "{:,.0f}".format(cost) }}</td>
-                <td style="color:#888">{{ "{:.1f}".format(cost/revenue*100 if revenue else 0) }}% of revenue</td></tr>
-            <tr style="background:#1a1a3a">
-                <td style="font-weight:bold">Gross Profit</td>
-                <td style="color:#00ff88;font-weight:bold">TZS {{ "{:,.0f}".format(gross_profit) }}</td>
-                <td style="color:#00ff88">{{ "{:.1f}".format(margin) }}% margin</td></tr>
-            <tr><td style="color:#888">Total Expenses</td>
-                <td style="color:#e94560">TZS {{ "{:,.0f}".format(total_expenses) }}</td>
-                <td style="color:#888">{{ "{:.1f}".format(total_expenses/revenue*100 if revenue else 0) }}% of revenue</td></tr>
-            <tr style="background:{% if net_profit>=0 %}#0d2a1a{% else %}#2a0d0d{% endif %}">
-                <td style="font-weight:bold;font-size:1rem">NET PROFIT / LOSS</td>
-                <td style="color:{% if net_profit>=0 %}#00ff88{% else %}#e94560{% endif %};font-weight:bold;font-size:1rem">
+
+            <tr>
+                <td>Total Revenue</td>
+                <td style="color:#f39c12;font-weight:700">
+                    TZS {{ "{:,.0f}".format(revenue) }}
+                </td>
+                <td>{{ transactions }} transactions</td>
+            </tr>
+
+            <tr>
+                <td>— Cost of Goods</td>
+                <td style="color:#9b59b6">
+                    (TZS {{ "{:,.0f}".format(cost) }})
+                </td>
+                <td>{{ "{:.1f}".format(cost/revenue*100 if revenue else 0) }}%</td>
+            </tr>
+
+            <tr style="background:#0d1a0d">
+                <td><strong>Gross Profit</strong></td>
+                <td style="color:#00ff88;font-weight:700">
+                    TZS {{ "{:,.0f}".format(gross_profit) }}
+                </td>
+                <td>{{ "{:.1f}".format(margin) }}%</td>
+            </tr>
+
+            <tr>
+                <td>— Expenses</td>
+                <td style="color:#e94560">
+                    (TZS {{ "{:,.0f}".format(total_expenses) }})
+                </td>
+                <td>{{ "{:.1f}".format(total_expenses/revenue*100 if revenue else 0) }}%</td>
+            </tr>
+
+            <tr>
+                <td><strong>NET PROFIT</strong></td>
+                <td style="color:{% if net_profit>=0 %}#00ff88{% else %}#e94560{% endif %}">
                     TZS {{ "{:,.0f}".format(net_profit) }}
                 </td>
-                <td style="color:{% if net_profit>=0 %}#00ff88{% else %}#e94560{% endif %}">
-                    {% if net_profit>=0 %}PROFIT{% else %}LOSS{% endif %}
+                <td>
+                    {% if net_profit>=0 %}
+                        <span class="badge badge-success">PROFIT</span>
+                    {% else %}
+                        <span class="badge badge-danger">LOSS</span>
+                    {% endif %}
                 </td>
             </tr>
+
         </tbody>
     </table>
 </div>
 
-<!-- AI Advice -->
-<div class="card" style="margin-bottom:16px;">
-    <div class="card-header">
-        <h3>🤖 AI Financial Advice</h3>
-        <span style="color:#888;font-size:0.78rem">Gross Margin: {{ "{:.1f}".format(margin) }}%</span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;">
+<!-- AI ADVICE -->
+<div class="card">
+    <div class="card-header"><h3>🤖 AI Financial Advice</h3></div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;">
+
         {% for a in advice %}
-        <div style="background:{% if a.type=='success' %}#0d2a1a{% elif a.type=='danger' %}#2a0d0d{% else %}#2a1a00{% endif %};
-                    border:1px solid {% if a.type=='success' %}#2a5a2a{% elif a.type=='danger' %}#5a2a2a{% else %}#5a3a00{% endif %};
-                    border-radius:10px;padding:14px;">
-            <div style="font-weight:600;font-size:0.88rem;margin-bottom:6px;
-                        color:{% if a.type=='success' %}#00ff88{% elif a.type=='danger' %}#e94560{% else %}#f39c12{% endif %}">
-                {% if a.type=='success' %}✅{% elif a.type=='danger' %}🚨{% else %}⚠{% endif %}
+        <div style="padding:14px;border-radius:10px;
+            background:
+            {% if a.type=='success' %}#0d2a1a
+            {% elif a.type=='danger' %}#2a0d0d
+            {% elif a.type=='info' %}#0d1a2a
+            {% else %}#2a1a00{% endif %};">
+
+            <div style="font-weight:600;color:
+                {% if a.type=='success' %}#00ff88
+                {% elif a.type=='danger' %}#e94560
+                {% elif a.type=='info' %}#4a9eff
+                {% else %}#f39c12{% endif %};">
+
                 {{ a.title }}
             </div>
-            <div style="font-size:0.8rem;color:#aaa;line-height:1.5">{{ a.message }}</div>
+
+            <div style="font-size:0.8rem;color:#aaa;">
+                {{ a.message }}
+            </div>
         </div>
         {% endfor %}
     </div>
 </div>
 
-<!-- Charts -->
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
-    <div class="card">
-        <div class="card-header"><h3>Sales Trend</h3></div>
-        <canvas id="trendChart" height="120"></canvas>
-    </div>
-    <div class="card">
-        <div class="card-header"><h3>Expenses by Category</h3></div>
-        {% if exp_by_cat %}
-        <canvas id="expChart" height="120"></canvas>
+<!-- TOP PRODUCTS -->
+<div class="card">
+    <div class="card-header"><h3>Top Selling Products</h3></div>
+
+    <table>
+        <thead>
+        <tr>
+            <th>#</th><th>Product</th><th>Qty</th><th>Revenue</th><th>Profit</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        {% for p in top_products %}
+        <tr>
+
+            <td style="color:{% if loop.index0==0 %}#f39c12
+                            {% elif loop.index0==1 %}#aaa
+                            {% elif loop.index0==2 %}#cd7f32
+                            {% else %}#555{% endif %};font-weight:bold">
+
+                {% if loop.index0==0 %}🥇
+                {% elif loop.index0==1 %}🥈
+                {% elif loop.index0==2 %}🥉
+                {% else %}#{{ loop.index }}
+                {% endif %}
+
+            </td>
+
+            <td>
+                <strong>{{ p.name }}</strong><br>
+                <small style="color:#888">{{ p.cat_name or '—' }}</small>
+            </td>
+
+            <td>{{ p.qty_sold }}</td>
+
+            <td style="color:#f39c12">
+                TZS {{ "{:,.0f}".format(p.revenue) }}
+            </td>
+
+            <td style="color:{% if p.profit>=0 %}#00ff88{% else %}#e94560{% endif %}">
+                TZS {{ "{:,.0f}".format(p.profit) }}
+            </td>
+
+        </tr>
         {% else %}
-        <p style="color:#555;text-align:center;padding:40px">No expenses recorded</p>
-        {% endif %}
-    </div>
+        <tr><td colspan="5" style="text-align:center">No data</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 
-<!-- Top products + categories -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
-    <div class="card">
-        <div class="card-header">
-            <h3>Top Products</h3>
-            <span style="color:#888;font-size:0.78rem">{{ transactions }} transactions</span>
-        </div>
-        <table>
-            <thead>
-                <tr><th>#</th><th>Product</th><th>Qty</th><th>Revenue</th><th>Profit</th></tr>
-            </thead>
-            <tbody>
-                {% for i,p in top_products|enumerate %}
-                <tr>
-                    <td style="color:{% if i==0 %}#f39c12{% elif i==1 %}#aaa{% elif i==2 %}#cd7f32{% else %}#555{% endif %};font-weight:bold">#{{ i+1 }}</td>
-                    <td><strong>{{ p.name }}</strong><br>
-                        <span style="color:#888;font-size:0.72rem">{{ p.cat_name or '—' }}</span></td>
-                    <td>{{ p.qty_sold }}</td>
-                    <td style="color:#f39c12">TZS {{ "{:,.0f}".format(p.revenue) }}</td>
-                    <td style="color:{% if p.profit>=0 %}#00ff88{% else %}#e94560{% endif %}">
-                        TZS {{ "{:,.0f}".format(p.profit) }}
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" style="text-align:center;color:#555;padding:20px">No sales data</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div class="card">
-        <div class="card-header"><h3>Top Categories</h3></div>
-        <table>
-            <thead>
-                <tr><th>#</th><th>Category</th><th>Dept</th><th>Qty</th><th>Revenue</th></tr>
-            </thead>
-            <tbody>
-                {% for i,c in top_categories|enumerate %}
-                <tr>
-                    <td style="color:{% if i==0 %}#f39c12{% else %}#555{% endif %};font-weight:bold">#{{ i+1 }}</td>
-                    <td><strong>{{ c.cat_name or 'Uncategorised' }}</strong></td>
-                    <td style="color:#888">{{ c.dept_name or '—' }}</td>
-                    <td>{{ c.qty_sold }}</td>
-                    <td style="color:#f39c12">TZS {{ "{:,.0f}".format(c.revenue) }}</td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" style="text-align:center;color:#555;padding:20px">No data</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+<!-- TOP CATEGORIES -->
+<div class="card">
+    <div class="card-header"><h3>Top Categories</h3></div>
+
+    <table>
+        <thead>
+        <tr><th>#</th><th>Category</th><th>Dept</th><th>Qty</th><th>Revenue</th></tr>
+        </thead>
+
+        <tbody>
+        {% for c in top_categories %}
+        <tr>
+
+            <td style="color:{% if loop.index0==0 %}#f39c12{% else %}#555{% endif %};font-weight:bold">
+                #{{ loop.index }}
+            </td>
+
+            <td>{{ c.cat_name or 'Uncategorised' }}</td>
+            <td style="color:#888">{{ c.dept_name or '—' }}</td>
+            <td>{{ c.qty_sold }}</td>
+            <td style="color:#f39c12">
+                TZS {{ "{:,.0f}".format(c.revenue) }}
+            </td>
+
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center">No data</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 
+<!-- EXPENSES -->
 {% if exp_by_cat %}
 <div class="card">
     <div class="card-header"><h3>Expenses Breakdown</h3></div>
+
     <table>
         <thead>
-            <tr><th>Category</th><th>Amount</th><th>% of Revenue</th><th>Recommendation</th></tr>
+        <tr><th>Category</th><th>Amount</th><th>%</th><th>Status</th></tr>
         </thead>
+
         <tbody>
-            {% for e in exp_by_cat %}
-            {% set pct=(e.total/revenue*100) if revenue>0 else 0 %}
-            <tr>
-                <td><span class="badge badge-warning">{{ e.category }}</span></td>
-                <td style="color:#e94560">TZS {{ "{:,.0f}".format(e.total) }}</td>
-                <td>{{ "{:.1f}".format(pct) }}%</td>
-                <td>
-                    {% if pct>15 %}<span class="badge badge-danger">⚠ Minimize</span>
-                    {% elif pct>8 %}<span class="badge badge-warning">Monitor</span>
-                    {% else %}<span class="badge badge-success">Normal</span>{% endif %}
-                </td>
-            </tr>
-            {% endfor %}
+        {% for e in exp_by_cat %}
+        {% set pct = (e.total/revenue*100) if revenue>0 else 0 %}
+
+        <tr>
+            <td>{{ e.category }}</td>
+            <td style="color:#e94560">TZS {{ "{:,.0f}".format(e.total) }}</td>
+            <td>{{ "{:.1f}".format(pct) }}%</td>
+            <td>
+                {% if pct>15 %}🔴
+                {% elif pct>8 %}🟡
+                {% else %}🟢{% endif %}
+            </td>
+        </tr>
+
+        {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
-const chartOpts={responsive:true,plugins:{legend:{display:false}},
-    scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#888',font:{size:11}}},
-            y:{grid:{color:'#1e1e3a'},ticks:{color:'#888',font:{size:11}},beginAtZero:true}}};
+const ds = {{ daily_sales|tojson }};
+if(ds.length){
+    new Chart(document.getElementById('trendChart'),{
+        type:'line',
+        data:{
+            labels:ds.map(d=>d.day),
+            datasets:[{data:ds.map(d=>d.total),borderColor:'#f39c12',tension:.4}]
+        }
+    });
+}
 
-const dailySales={{ daily_sales|tojson }};
-new Chart(document.getElementById('trendChart'),{
-    type:'line',
-    data:{labels:dailySales.map(d=>d.day),
-          datasets:[{data:dailySales.map(d=>d.total),
-                     borderColor:'#f39c12',backgroundColor:'rgba(243,156,18,.1)',
-                     tension:.4,fill:true,pointRadius:3}]},
-    options:chartOpts
-});
-
-const expData={{ exp_by_cat|tojson }};
-if(expData.length && document.getElementById('expChart')){
+const ed = {{ exp_by_cat|tojson }};
+if(ed.length){
     new Chart(document.getElementById('expChart'),{
         type:'doughnut',
-        data:{labels:expData.map(e=>e.category),
-              datasets:[{data:expData.map(e=>e.total),
-                         backgroundColor:['#e94560','#f39c12','#4a9eff',
-                                          '#00ff88','#9b59b6','#e67e22','#1abc9c','#e74c3c']}]},
-        options:{responsive:true,
-                 plugins:{legend:{display:true,position:'bottom',labels:{color:'#888',font:{size:11}}}}}
+        data:{
+            labels:ed.map(e=>e.category),
+            datasets:[{data:ed.map(e=>e.total)}]
+        }
     });
 }
 </script>

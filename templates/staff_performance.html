@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+{% block title %}Staff Performance — Noddy Store{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h2>Staff Performance</h2>
+        <p>Monthly performance analysis per staff member</p>
+    </div>
+    <a href="/staff" class="btn btn-secondary">← Back to Staff</a>
+</div>
+
+<div class="filter-bar">
+    <form method="GET" style="display:flex;gap:10px;align-items:flex-end;">
+        <div>
+            <span class="filter-label">Month</span>
+            <input type="month" name="month" value="{{ month }}"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+<!-- Summary -->
+{% if performance %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">
+
+    <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="number">{{ performance|length }}</div>
+        <div class="label">Staff Members</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="number">
+            TZS {{ performance | map(attribute='total_revenue') | sum }}
+        </div>
+        <div class="label">Total Revenue</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">🛒</div>
+        <div class="number">
+            {{ performance | map(attribute='total_sales') | sum }}
+        </div>
+        <div class="label">Total Sales</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">💵</div>
+        <div class="number">
+            TZS {{ performance | map(attribute='salary') | sum }}
+        </div>
+        <div class="label">Salary Bill</div>
+    </div>
+
+</div>
+{% endif %}
+
+<!-- Chart -->
+{% if performance %}
+<div class="card">
+    <div class="card-header">
+        <h3>Revenue per Staff — {{ month }}</h3>
+    </div>
+    <canvas id="perfChart" height="80"></canvas>
+</div>
+{% endif %}
+
+<!-- Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>Performance Rankings — {{ month }}</h3>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Staff Name</th>
+                <th>Role</th>
+                <th>Branch</th>
+                <th>Sales</th>
+                <th>Revenue</th>
+                <th>Days</th>
+                <th>Salary</th>
+                <th>Revenue/Day</th>
+                <th>Rating</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+        {% for p in performance %}
+
+            {% set perf_score = (p.total_sales/10 + p.days_present/3) %}
+            {% set rev_per_day = (p.total_revenue/p.days_present if p.days_present > 0 else 0) %}
+
+        <tr>
+
+            <td>
+                {{ loop.index }}
+            </td>
+
+            <td><strong>{{ p.full_name }}</strong></td>
+
+            <td>
+                <span class="badge">
+                    {{ p.role }}
+                </span>
+            </td>
+
+            <td>{{ p.branch_name }}</td>
+
+            <td>{{ p.total_sales }}</td>
+
+            <td>TZS {{ "{:,.0f}".format(p.total_revenue) }}</td>
+
+            <td>{{ p.days_present }}</td>
+
+            <td>TZS {{ "{:,.0f}".format(p.salary) }}</td>
+
+            <td>TZS {{ "{:,.0f}".format(rev_per_day) }}</td>
+
+            <td>
+                {% if perf_score >= 15 %}
+                    ⭐ Excellent
+                {% elif perf_score >= 8 %}
+                    👍 Good
+                {% elif perf_score >= 3 %}
+                    😐 Average
+                {% else %}
+                    ⚠ Needs Improvement
+                {% endif %}
+            </td>
+
+        </tr>
+
+        {% else %}
+        <tr>
+            <td colspan="10" style="text-align:center;padding:30px;">
+                No performance data for {{ month }}
+            </td>
+        </tr>
+        {% endfor %}
+
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+<script>
+const perfData = {{ performance | tojson }};
+
+if(perfData.length){
+    new Chart(document.getElementById('perfChart'),{
+        type:'bar',
+        data:{
+            labels:perfData.map(p=>p.full_name),
+            datasets:[{
+                label:'Revenue',
+                data:perfData.map(p=>p.total_revenue),
+                backgroundColor:'#f39c12'
+            }]
+        }
+    });
+}
+</script>
+{% endblock %}
