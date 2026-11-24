@@ -1,230 +1,329 @@
-import sqlite3
-from datetime import datetime
+import datetime
+import decimal
+import sys
 
-DB = 'noddy_store.db'
+import pymysql
+import pymysql.cursors
+
+import config
+
+T = 'ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+
+
+# ── Rows behave like a dict AND support row[0] ─────────
+class Row(dict):
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return dict.__getitem__(self, key)
+
+
+def _clean(value):
+    """Convert MySQL types into plain Python values the templates expect."""
+    if isinstance(value, decimal.Decimal):
+        f = float(value)
+        return int(f) if f.is_integer() else f
+    if isinstance(value, datetime.datetime):
+        return value.strftime('%Y-%m-%d %H:%M:%S')
+    if isinstance(value, datetime.date):
+        return value.strftime('%Y-%m-%d')
+    if isinstance(value, datetime.timedelta):
+        t = int(value.total_seconds())
+        return f'{t // 3600:02d}:{t % 3600 // 60:02d}:{t % 60:02d}'
+    return value
+
+
+class Result:
+    def __init__(self, cur):
+        self._cur = cur
+
+    @property
+    def lastrowid(self):
+        return self._cur.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    def fetchone(self):
+        r = self._cur.fetchone()
+        return Row((k, _clean(v)) for k, v in r.items()) if r else None
+
+    def fetchall(self):
+        return [Row((k, _clean(v)) for k, v in r.items())
+                for r in self._cur.fetchall()]
+
+
+class Connection:
+    """Small wrapper so queries can use ? placeholders."""
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql, params=None):
+        if params:
+            sql = sql.replace('%', '%%').replace('?', '%s')
+            params = tuple(params)
+        else:
+            params = None
+        cur = self._raw.cursor()
+        cur.execute(sql, params)
+        return Result(cur)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+
+def _connect(with_db=True):
+    return pymysql.connect(
+        host=config.MYSQL_HOST, port=config.MYSQL_PORT,
+        user=config.MYSQL_USER, password=config.MYSQL_PASSWORD,
+        database=config.MYSQL_DATABASE if with_db else None,
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor,
+        init_command="SET SESSION sql_mode=REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','')",
+        autocommit=False)
+
 
 def get_db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return Connection(_connect())
+
+
+SCHEMA = [
+f"""CREATE TABLE IF NOT EXISTS branches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    location VARCHAR(200),
+    phone VARCHAR(40),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(120) NOT NULL,
+    username VARCHAR(60) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    `role` VARCHAR(20) DEFAULT 'cashier',
+    branch_id INT NULL,
+    active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS login_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    username VARCHAR(60),
+    action VARCHAR(20),
+    `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS departments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    description VARCHAR(255),
+    branch_id INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_dept_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    department_id INT NULL,
+    description VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cat_dept FOREIGN KEY (department_id)
+        REFERENCES departments(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    barcode VARCHAR(80) NULL UNIQUE,
+    category_id INT NULL,
+    branch_id INT NULL,
+    buying_price DECIMAL(15,2) DEFAULT 0,
+    selling_price DECIMAL(15,2) DEFAULT 0,
+    stock_qty INT DEFAULT 0,
+    min_stock INT DEFAULT 5,
+    unit VARCHAR(20) DEFAULT 'pcs',
+    description TEXT NULL,
+    active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_prod_cat FOREIGN KEY (category_id)
+        REFERENCES categories(id) ON DELETE SET NULL,
+    CONSTRAINT fk_prod_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS customers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(120) NOT NULL,
+    phone VARCHAR(40),
+    email VARCHAR(120),
+    address VARCHAR(255),
+    debit_limit DECIMAL(15,2) DEFAULT 0,
+    debit_balance DECIMAL(15,2) DEFAULT 0,
+    branch_id INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cust_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS sales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    receipt_no VARCHAR(40) NOT NULL UNIQUE,
+    branch_id INT NULL,
+    user_id INT NULL,
+    customer_id INT NULL,
+    total_amount DECIMAL(15,2) DEFAULT 0,
+    paid_amount DECIMAL(15,2) DEFAULT 0,
+    change_amount DECIMAL(15,2) DEFAULT 0,
+    payment_type VARCHAR(20) DEFAULT 'cash',
+    status VARCHAR(20) DEFAULT 'completed',
+    notes TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_sales_created (created_at),
+    CONSTRAINT fk_sales_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_sales_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_sales_cust FOREIGN KEY (customer_id)
+        REFERENCES customers(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS sale_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_id INT NOT NULL,
+    product_id INT NULL,
+    quantity INT,
+    unit_price DECIMAL(15,2),
+    total_price DECIMAL(15,2),
+    CONSTRAINT fk_items_sale FOREIGN KEY (sale_id)
+        REFERENCES sales(id) ON DELETE CASCADE,
+    CONSTRAINT fk_items_prod FOREIGN KEY (product_id)
+        REFERENCES products(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS expenses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NULL,
+    category VARCHAR(60),
+    description VARCHAR(255),
+    amount DECIMAL(15,2),
+    recorded_by INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_exp_created (created_at),
+    CONSTRAINT fk_exp_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_exp_user FOREIGN KEY (recorded_by)
+        REFERENCES users(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS attendance (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    branch_id INT NULL,
+    `date` DATE NOT NULL,
+    check_in TIME NULL,
+    check_out TIME NULL,
+    status VARCHAR(20) DEFAULT 'present',
+    UNIQUE KEY uq_attendance (user_id, `date`),
+    CONSTRAINT fk_att_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_att_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS salaries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    branch_id INT NULL,
+    amount DECIMAL(15,2),
+    `month` VARCHAR(7) NOT NULL,
+    paid TINYINT(1) DEFAULT 0,
+    paid_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_salary (user_id, `month`),
+    CONSTRAINT fk_sal_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_sal_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS stock_transfers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NULL,
+    from_branch INT NULL,
+    to_branch INT NULL,
+    quantity INT,
+    transferred_by INT NULL,
+    notes TEXT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) {T}""",
+
+f"""CREATE TABLE IF NOT EXISTS mobile_money_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NULL,
+    provider VARCHAR(40) NOT NULL,
+    `type` VARCHAR(10) NOT NULL,
+    phone_number VARCHAR(40),
+    amount DECIMAL(15,2) NOT NULL,
+    reference VARCHAR(80),
+    description VARCHAR(255),
+    recorded_by INT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_mm_created (created_at),
+    CONSTRAINT fk_mm_branch FOREIGN KEY (branch_id)
+        REFERENCES branches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_mm_user FOREIGN KEY (recorded_by)
+        REFERENCES users(id) ON DELETE SET NULL
+) {T}""",
+]
+
 
 def init_db():
-    conn = get_db()
-    c = conn.cursor()
+    try:
+        raw = _connect(with_db=False)
+        raw.cursor().execute(
+            f"CREATE DATABASE IF NOT EXISTS `{config.MYSQL_DATABASE}` "
+            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        raw.commit()
+        raw.close()
+        conn = get_db()
+    except pymysql.err.OperationalError as e:
+        print("\nCould not connect to MySQL:", e)
+        print("Check that MySQL is running and that config.py has the "
+              "right user, password and port.\n")
+        sys.exit(1)
 
-    # Branches
-    c.execute('''CREATE TABLE IF NOT EXISTS branches (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        name       TEXT NOT NULL,
-        location   TEXT,
-        phone      TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-    # Users
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name  TEXT NOT NULL,
-        username   TEXT UNIQUE NOT NULL,
-        password   TEXT NOT NULL,
-        role       TEXT DEFAULT 'cashier',
-        branch_id  INTEGER,
-        active     INTEGER DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id) REFERENCES branches(id)
-    )''')
-
-    # Login logs
-    c.execute('''CREATE TABLE IF NOT EXISTS login_logs (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id    INTEGER,
-        username   TEXT,
-        action     TEXT,
-        timestamp  TEXT DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-    # Departments
-    c.execute('''CREATE TABLE IF NOT EXISTS departments (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        name        TEXT NOT NULL,
-        description TEXT,
-        branch_id   INTEGER,
-        created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id) REFERENCES branches(id)
-    )''')
-
-    # Categories
-    c.execute('''CREATE TABLE IF NOT EXISTS categories (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        name          TEXT NOT NULL,
-        department_id INTEGER,
-        description   TEXT,
-        created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (department_id) REFERENCES departments(id)
-    )''')
-
-    # Products
-    c.execute('''CREATE TABLE IF NOT EXISTS products (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        name          TEXT NOT NULL,
-        barcode       TEXT UNIQUE,
-        category_id   INTEGER,
-        branch_id     INTEGER,
-        buying_price  REAL DEFAULT 0,
-        selling_price REAL DEFAULT 0,
-        stock_qty     INTEGER DEFAULT 0,
-        min_stock     INTEGER DEFAULT 5,
-        unit          TEXT DEFAULT 'pcs',
-        description   TEXT,
-        active        INTEGER DEFAULT 1,
-        created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (category_id) REFERENCES categories(id),
-        FOREIGN KEY (branch_id)   REFERENCES branches(id)
-    )''')
-
-    # Sales
-    c.execute('''CREATE TABLE IF NOT EXISTS sales (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        receipt_no   TEXT UNIQUE,
-        branch_id    INTEGER,
-        user_id      INTEGER,
-        customer_id  INTEGER,
-        total_amount REAL DEFAULT 0,
-        paid_amount  REAL DEFAULT 0,
-        change_amount REAL DEFAULT 0,
-        payment_type TEXT DEFAULT 'cash',
-        status       TEXT DEFAULT 'completed',
-        notes        TEXT,
-        created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id)   REFERENCES branches(id),
-        FOREIGN KEY (user_id)     REFERENCES users(id),
-        FOREIGN KEY (customer_id) REFERENCES customers(id)
-    )''')
-
-    # Sale items
-    c.execute('''CREATE TABLE IF NOT EXISTS sale_items (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        sale_id     INTEGER,
-        product_id  INTEGER,
-        quantity    INTEGER,
-        unit_price  REAL,
-        total_price REAL,
-        FOREIGN KEY (sale_id)    REFERENCES sales(id),
-        FOREIGN KEY (product_id) REFERENCES products(id)
-    )''')
-
-    # Customers (including debit customers)
-    c.execute('''CREATE TABLE IF NOT EXISTS customers (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name    TEXT NOT NULL,
-        phone        TEXT,
-        email        TEXT,
-        address      TEXT,
-        debit_limit  REAL DEFAULT 0,
-        debit_balance REAL DEFAULT 0,
-        branch_id    INTEGER,
-        created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id) REFERENCES branches(id)
-    )''')
-
-    # Expenses
-    c.execute('''CREATE TABLE IF NOT EXISTS expenses (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        branch_id   INTEGER,
-        category    TEXT,
-        description TEXT,
-        amount      REAL,
-        recorded_by INTEGER,
-        created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id)   REFERENCES branches(id),
-        FOREIGN KEY (recorded_by) REFERENCES users(id)
-    )''')
-
-    # Staff attendance
-    c.execute('''CREATE TABLE IF NOT EXISTS attendance (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id    INTEGER,
-        branch_id  INTEGER,
-        date       TEXT,
-        check_in   TEXT,
-        check_out  TEXT,
-        status     TEXT DEFAULT 'present',
-        FOREIGN KEY (user_id)   REFERENCES users(id),
-        FOREIGN KEY (branch_id) REFERENCES branches(id)
-    )''')
-
-    # Staff salaries
-    c.execute('''CREATE TABLE IF NOT EXISTS salaries (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id     INTEGER,
-        branch_id   INTEGER,
-        amount      REAL,
-        month       TEXT,
-        paid        INTEGER DEFAULT 0,
-        paid_at     TEXT,
-        created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id)   REFERENCES users(id),
-        FOREIGN KEY (branch_id) REFERENCES branches(id)
-    )''')
-
-    # Stock transfers between branches
-    c.execute('''CREATE TABLE IF NOT EXISTS stock_transfers (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        product_id   INTEGER,
-        from_branch  INTEGER,
-        to_branch    INTEGER,
-        quantity     INTEGER,
-        transferred_by INTEGER,
-        notes        TEXT,
-        created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id)      REFERENCES products(id),
-        FOREIGN KEY (from_branch)     REFERENCES branches(id),
-        FOREIGN KEY (to_branch)       REFERENCES branches(id),
-        FOREIGN KEY (transferred_by)  REFERENCES users(id)
-    )''')
-# Mobile money transactions
-    c.execute('''CREATE TABLE IF NOT EXISTS mobile_money_transactions (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        branch_id    INTEGER,
-        provider     TEXT NOT NULL,
-        type         TEXT NOT NULL,
-        phone_number TEXT,
-        amount       REAL NOT NULL,
-        reference    TEXT,
-        description  TEXT,
-        recorded_by  INTEGER,
-        created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (branch_id)   REFERENCES branches(id),
-        FOREIGN KEY (recorded_by) REFERENCES users(id)
-    )''')
-
-
-
-
-
+    for ddl in SCHEMA:
+        conn.execute(ddl)
     conn.commit()
 
-    # ── Seed default data ──────────────────────────────
-    # Default branch
-    c.execute('SELECT COUNT(*) FROM branches')
-    if c.fetchone()[0] == 0:
-        c.execute('''INSERT INTO branches (name, location, phone)
-                     VALUES (?,?,?)''',
-                  ('Main Branch', 'Dar es Salaam', '+255700000000'))
-        conn.commit()
+    if conn.execute('SELECT COUNT(*) FROM branches').fetchone()[0] == 0:
+        conn.execute('INSERT INTO branches (name, location, phone) VALUES (?,?,?)',
+                     ('Main Branch', 'Dar es Salaam', '+255700000000'))
         print("  Default branch created: Main Branch")
 
-    # Default admin user
-    from auth import hash_password
-    c.execute('SELECT COUNT(*) FROM users')
-    if c.fetchone()[0] == 0:
-        c.execute('''INSERT INTO users
-                     (full_name, username, password, role, branch_id)
-                     VALUES (?,?,?,?,?)''',
-                  ('System Admin', 'admin',
-                   hash_password('admin123'), 'admin', 1))
-        conn.commit()
+    if conn.execute('SELECT COUNT(*) FROM users').fetchone()[0] == 0:
+        from auth import hash_password
+        branch_id = conn.execute(
+            'SELECT id FROM branches ORDER BY id LIMIT 1').fetchone()['id']
+        conn.execute(
+            'INSERT INTO users (full_name, username, password, `role`, branch_id) '
+            'VALUES (?,?,?,?,?)',
+            ('System Admin', 'admin', hash_password('admin123'), 'admin', branch_id))
         print("  Default user created: admin / admin123")
 
+    conn.commit()
     conn.close()
-    print("  Database ready!")
+    print(f"  MySQL database ready: {config.MYSQL_DATABASE}")
