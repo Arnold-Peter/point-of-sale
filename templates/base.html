@@ -2,12 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" id="vp" content="width=1200">
+    <script>
+        // On phones the page is laid out 1200px wide (like a PC) and scaled to fit the screen.
+        // Make this number bigger = more PC-like but smaller text. Smaller = bigger text but more cramped.
+        var DESKTOP_WIDTH = 1200;
+        var viewMode = 'desktop';
+        try { viewMode = localStorage.getItem('viewMode') || 'desktop'; } catch (e) {}
+        document.getElementById('vp').setAttribute('content',
+            viewMode === 'desktop' ? 'width=' + DESKTOP_WIDTH
+                                   : 'width=device-width, initial-scale=1');
+    </script>
     <meta name="theme-color" content="#13132a">
     <title>{% block title %}Noddy Store{% endblock %}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
-        html{-webkit-text-size-adjust:100%;}
+        html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
         body{background:#0f0f1a;color:#fff;font-family:'Segoe UI',sans-serif;display:flex;min-height:100vh;}
 
         /* ── Sidebar ── */
@@ -28,7 +38,7 @@
         .btn-logout{margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid #2a2a4a;border-radius:6px;color:#888;cursor:pointer;font-size:0.78rem;}
         .btn-logout:hover{border-color:#f39c12;color:#f39c12;}
 
-        /* ── Mobile top bar (hidden on desktop) ── */
+        /* ── Phone-layout top bar (hidden in PC layout) ── */
         .topbar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#13132a;border-bottom:1px solid #1e1e3a;z-index:200;align-items:center;gap:12px;padding:0 12px;}
         .menu-btn{background:#1e1e3a;border:none;color:#fff;font-size:1.3rem;width:40px;height:40px;border-radius:8px;cursor:pointer;}
         .topbar-title{font-weight:600;font-size:1.05rem;flex:1;}
@@ -91,29 +101,22 @@
         .filter-label{color:#888;font-size:0.72rem;text-transform:uppercase;margin-bottom:4px;display:block;}
         canvas{max-width:100%;}
 
-        /* ══════════ TABLET + PHONE (up to 900px) ══════════ */
+        /* ══════════ PHONE LAYOUT (only when "Switch to phone layout" is chosen,
+                      or the browser window is narrower than 900px) ══════════ */
         @media (max-width:900px){
             .topbar{display:flex;}
-            .sidebar{transform:translateX(-100%);transition:transform .25s ease;width:260px;box-shadow:none;}
+            .sidebar{transform:translateX(-100%);transition:transform .25s ease;width:260px;}
             .sidebar.open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.6);}
             .nav-item{padding:12px 18px;font-size:0.9rem;}
             .main{margin-left:0;width:100%;padding:66px 12px 80px;}
             .page-header h2{font-size:1.25rem;}
             .card{padding:14px;}
-
-            /* every inline multi-column grid becomes 2 columns */
             [style*="grid-template-columns"]{grid-template-columns:repeat(2,1fr) !important;}
-            /* inline flex rows can wrap */
             .main [style*="display:flex"]{flex-wrap:wrap;}
-
-            /* wide tables scroll sideways inside their card */
             table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
-
             .filter-bar form{width:100%;}
             .filter-bar > div,.filter-bar form > div{flex:1 1 140px;}
             .filter-bar input,.filter-bar select{width:100%;}
-
-            /* POS: products on top, cart below */
             .pos-layout{grid-template-columns:1fr !important;height:auto !important;}
             .products-panel{overflow:visible !important;border-right:none !important;padding:8px !important;}
             .product-grid{max-height:60vh;overflow-y:auto;}
@@ -121,14 +124,12 @@
             .cart-items{max-height:45vh;min-height:80px;}
             .cart-fab{display:block;position:fixed;right:14px;bottom:14px;z-index:180;background:#f39c12;color:#000;border:none;border-radius:30px;padding:12px 18px;font-weight:700;font-size:0.9rem;box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer;}
         }
-
-        /* ══════════ PHONE (up to 600px) ══════════ */
         @media (max-width:600px){
             [style*="grid-template-columns"]{grid-template-columns:1fr !important;}
             .form-grid{grid-template-columns:1fr;}
             .modal{padding:16px;}
             .modal-footer .btn{flex:1;}
-            input,select,textarea{font-size:16px !important;}  /* stops iPhone zooming in */
+            input,select,textarea{font-size:16px !important;}
             .btn{padding:10px 14px;}
             .btn-sm{padding:7px 11px;}
             .stat-info .number{font-size:1.25rem;}
@@ -140,7 +141,7 @@
 </head>
 <body>
 
-<!-- Mobile top bar -->
+<!-- Phone-layout top bar -->
 <div class="topbar">
     <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
     <div class="topbar-title">🏪 <span>Noddy</span> Store</div>
@@ -227,6 +228,9 @@
                 <div class="user-role">{{ session.role }} · {{ session.branch_name }}</div>
             </div>
         </div>
+        <!-- Only shown on touch devices -->
+        <button class="btn-logout" id="viewToggle" type="button"
+                style="display:none;margin-bottom:6px"></button>
         <a href="/logout"><button class="btn-logout">Sign Out</button></a>
     </div>
 </div>
@@ -243,7 +247,6 @@
 </div>
 
 <script>
-// Mobile menu
 (function(){
     var sb = document.getElementById('sidebar');
     var bd = document.getElementById('backdrop');
@@ -255,7 +258,20 @@
     sb.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', closeMenu); });
     window.addEventListener('resize', function(){ if (window.innerWidth > 900) closeMenu(); });
 
-    // POS: floating cart button on phones
+    // PC layout <-> phone layout switch (touch devices only)
+    var vt = document.getElementById('viewToggle');
+    if (vt && window.matchMedia('(pointer:coarse)').matches) {
+        vt.style.display = 'block';
+        vt.textContent = viewMode === 'desktop' ? '📱 Switch to phone layout'
+                                                : '🖥 Switch to PC layout';
+        vt.addEventListener('click', function(){
+            try { localStorage.setItem('viewMode',
+                  viewMode === 'desktop' ? 'mobile' : 'desktop'); } catch (e) {}
+            location.reload();
+        });
+    }
+
+    // POS: floating cart button (phone layout only)
     var cart = document.querySelector('.cart-panel');
     if (cart) {
         var fab = document.createElement('button');
