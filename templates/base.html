@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#13132a">
     <title>{% block title %}Noddy Store{% endblock %}</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;}
+        html{-webkit-text-size-adjust:100%;}
         body{background:#0f0f1a;color:#fff;font-family:'Segoe UI',sans-serif;display:flex;min-height:100vh;}
-        .sidebar{width:220px;background:#13132a;border-right:1px solid #1e1e3a;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100;overflow-y:auto;}
+
+        /* ── Sidebar ── */
+        .sidebar{width:220px;background:#13132a;border-right:1px solid #1e1e3a;display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;height:100dvh;z-index:300;overflow-y:auto;}
         .sidebar-logo{padding:20px 16px;border-bottom:1px solid #1e1e3a;flex-shrink:0;}
         .sidebar-logo h1{font-size:1.2rem;color:#fff;}
         .sidebar-logo h1 span{color:#f39c12;}
@@ -23,16 +27,29 @@
         .user-role{font-size:0.7rem;color:#888;text-transform:capitalize;}
         .btn-logout{margin-top:8px;width:100%;padding:7px;background:transparent;border:1px solid #2a2a4a;border-radius:6px;color:#888;cursor:pointer;font-size:0.78rem;}
         .btn-logout:hover{border-color:#f39c12;color:#f39c12;}
-        .main{margin-left:220px;flex:1;padding:20px;overflow-y:auto;min-height:100vh;}
+
+        /* ── Mobile top bar (hidden on desktop) ── */
+        .topbar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#13132a;border-bottom:1px solid #1e1e3a;z-index:200;align-items:center;gap:12px;padding:0 12px;}
+        .menu-btn{background:#1e1e3a;border:none;color:#fff;font-size:1.3rem;width:40px;height:40px;border-radius:8px;cursor:pointer;}
+        .topbar-title{font-weight:600;font-size:1.05rem;flex:1;}
+        .topbar-title span{color:#f39c12;}
+        .topbar-user{font-size:0.8rem;color:#888;}
+        .backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:250;}
+        .backdrop.show{display:block;}
+        .cart-fab{display:none;}
+
+        /* ── Main ── */
+        .main{margin-left:220px;flex:1;min-width:0;padding:20px;min-height:100vh;}
         .page-header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;}
         .page-header h2{font-size:1.5rem;font-weight:600;}
         .page-header p{color:#888;font-size:0.85rem;margin-top:3px;}
         .card{background:#13132a;border-radius:12px;border:1px solid #1e1e3a;padding:20px;margin-bottom:16px;}
-        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e1e3a;}
+        .card-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #1e1e3a;}
         .card-header h3{font-size:0.95rem;color:#ccc;}
         .stat-card{background:#13132a;border-radius:12px;padding:16px;border:1px solid #1e1e3a;display:flex;align-items:center;gap:12px;}
         .stat-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
-        .stat-info .number{font-size:1.5rem;font-weight:700;}
+        .stat-info{min-width:0;}
+        .stat-info .number{font-size:1.5rem;font-weight:700;word-break:break-word;}
         .stat-info .label{color:#888;font-size:0.7rem;text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
         table{width:100%;border-collapse:collapse;}
         th,td{padding:9px 12px;text-align:left;font-size:0.82rem;border-bottom:1px solid #1e1e3a;}
@@ -60,23 +77,78 @@
         .alert{padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;}
         .alert-success{background:#0d2a1a;border:1px solid #2a5a2a;color:#00ff88;}
         .alert-error{background:#2a0d0d;border:1px solid #5a2a2a;color:#ff6b6b;}
-        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;}
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:400;align-items:center;justify-content:center;padding:10px;}
         .modal-overlay.show{display:flex;}
-        .modal{background:#13132a;border-radius:12px;padding:24px;width:500px;border:1px solid #2a2a4a;max-height:90vh;overflow-y:auto;}
+        .modal{background:#13132a;border-radius:12px;padding:24px;width:100%;max-width:500px;border:1px solid #2a2a4a;max-height:92vh;overflow-y:auto;}
         .modal h2{font-size:1.1rem;margin-bottom:16px;color:#f39c12;}
-        .modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
-        ::-webkit-scrollbar{width:5px;}
+        .modal-footer{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;}
+        ::-webkit-scrollbar{width:5px;height:5px;}
         ::-webkit-scrollbar-track{background:#0f0f1a;}
         ::-webkit-scrollbar-thumb{background:#2a2a4a;border-radius:3px;}
         .filter-bar{background:#13132a;border-radius:10px;border:1px solid #1e1e3a;padding:12px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
         .filter-bar input,.filter-bar select{padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;font-size:0.83rem;}
         .filter-bar input:focus,.filter-bar select:focus{border-color:#f39c12;}
         .filter-label{color:#888;font-size:0.72rem;text-transform:uppercase;margin-bottom:4px;display:block;}
+        canvas{max-width:100%;}
+
+        /* ══════════ TABLET + PHONE (up to 900px) ══════════ */
+        @media (max-width:900px){
+            .topbar{display:flex;}
+            .sidebar{transform:translateX(-100%);transition:transform .25s ease;width:260px;box-shadow:none;}
+            .sidebar.open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.6);}
+            .nav-item{padding:12px 18px;font-size:0.9rem;}
+            .main{margin-left:0;width:100%;padding:66px 12px 80px;}
+            .page-header h2{font-size:1.25rem;}
+            .card{padding:14px;}
+
+            /* every inline multi-column grid becomes 2 columns */
+            [style*="grid-template-columns"]{grid-template-columns:repeat(2,1fr) !important;}
+            /* inline flex rows can wrap */
+            .main [style*="display:flex"]{flex-wrap:wrap;}
+
+            /* wide tables scroll sideways inside their card */
+            table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
+
+            .filter-bar form{width:100%;}
+            .filter-bar > div,.filter-bar form > div{flex:1 1 140px;}
+            .filter-bar input,.filter-bar select{width:100%;}
+
+            /* POS: products on top, cart below */
+            .pos-layout{grid-template-columns:1fr !important;height:auto !important;}
+            .products-panel{overflow:visible !important;border-right:none !important;padding:8px !important;}
+            .product-grid{max-height:60vh;overflow-y:auto;}
+            .cart-panel{height:auto !important;border-top:2px solid #f39c12;}
+            .cart-items{max-height:45vh;min-height:80px;}
+            .cart-fab{display:block;position:fixed;right:14px;bottom:14px;z-index:180;background:#f39c12;color:#000;border:none;border-radius:30px;padding:12px 18px;font-weight:700;font-size:0.9rem;box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer;}
+        }
+
+        /* ══════════ PHONE (up to 600px) ══════════ */
+        @media (max-width:600px){
+            [style*="grid-template-columns"]{grid-template-columns:1fr !important;}
+            .form-grid{grid-template-columns:1fr;}
+            .modal{padding:16px;}
+            .modal-footer .btn{flex:1;}
+            input,select,textarea{font-size:16px !important;}  /* stops iPhone zooming in */
+            .btn{padding:10px 14px;}
+            .btn-sm{padding:7px 11px;}
+            .stat-info .number{font-size:1.25rem;}
+            .product-grid{grid-template-columns:repeat(2,1fr) !important;}
+            .page-header .btn{width:100%;text-align:center;}
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-<div class="sidebar">
+
+<!-- Mobile top bar -->
+<div class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
+    <div class="topbar-title">🏪 <span>Noddy</span> Store</div>
+    <div class="topbar-user">{{ session.full_name.split(' ')[0] }}</div>
+</div>
+<div class="backdrop" id="backdrop"></div>
+
+<div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
         <h1>🏪 <span>Noddy</span> Store</h1>
         <p>Point of Sale System</p>
@@ -105,7 +177,7 @@
         </a>
 
         <div class="nav-section">Sales</div>
-        <a href="/sales" class="nav-item {% if request.path=='/sales' %}active{% endif %}">
+        <a href="/sales" class="nav-item {% if request.path.startswith('/sales') %}active{% endif %}">
             <span class="icon">💰</span> Sales History
         </a>
         <a href="/customers" class="nav-item {% if request.path.startswith('/customers') %}active{% endif %}">
@@ -158,6 +230,7 @@
         <a href="/logout"><button class="btn-logout">Sign Out</button></a>
     </div>
 </div>
+
 <div class="main">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -168,6 +241,35 @@
     {% endwith %}
     {% block content %}{% endblock %}
 </div>
+
+<script>
+// Mobile menu
+(function(){
+    var sb = document.getElementById('sidebar');
+    var bd = document.getElementById('backdrop');
+    function closeMenu(){ sb.classList.remove('open'); bd.classList.remove('show'); }
+    document.getElementById('menuBtn').addEventListener('click', function(){
+        sb.classList.toggle('open'); bd.classList.toggle('show');
+    });
+    bd.addEventListener('click', closeMenu);
+    sb.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', closeMenu); });
+    window.addEventListener('resize', function(){ if (window.innerWidth > 900) closeMenu(); });
+
+    // POS: floating cart button on phones
+    var cart = document.querySelector('.cart-panel');
+    if (cart) {
+        var fab = document.createElement('button');
+        fab.className = 'cart-fab';
+        fab.textContent = '🛒 Cart';
+        fab.addEventListener('click', function(){ cart.scrollIntoView({behavior:'smooth'}); });
+        document.body.appendChild(fab);
+        setInterval(function(){
+            var n = document.getElementById('total-items');
+            fab.textContent = '🛒 Cart (' + (n ? n.textContent : 0) + ')';
+        }, 600);
+    }
+})();
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>
