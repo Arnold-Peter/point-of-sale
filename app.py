@@ -242,8 +242,7 @@ def api_heartbeat():
     return jsonify({'ok': True})
 
 
-@app.route('/api/online')
-@login_required
+
 @app.route('/api/online')
 @login_required
 def api_online():
