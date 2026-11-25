@@ -7,6 +7,7 @@
     var lastInteraction = Date.now();
     var pending = true;
     var banner = null;
+    var leaving = false;      // true when we are signing out on purpose
 
     function interacted() {
         lastInteraction = Date.now();
@@ -22,16 +23,28 @@
         if (n - lastMove > 5000) { lastMove = n; interacted(); }
     }, { passive: true });
 
+    // Pressing Sign Out records the exact sign-out time
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest ? e.target.closest('a[href="/logout"]') : null;
+        if (a) leaving = true;
+    }, true);
+
+    // Closing the tab records the exact "last seen" time
+    window.addEventListener('pagehide', function () {
+        if (!leaving && navigator.sendBeacon) navigator.sendBeacon('/api/leave');
+    });
+
     // Tell the server the user is still working (only if they did something)
     setInterval(function () {
         if (!pending) return;
         pending = false;
         fetch('/api/heartbeat', { method: 'POST', credentials: 'same-origin' })
-            .then(function (r) { if (r.status === 401 || r.redirected) location.href = '/login'; })
+            .then(function (r) {
+                if (r.status === 401 || r.redirected) { leaving = true; location.href = '/login'; }
+            })
             .catch(function () {});
     }, HEARTBEAT_MS);
 
-    // Idle watcher: warn at 4:30, sign out at 5:00
     function showBanner() {
         if (!banner) {
             banner = document.createElement('div');
@@ -45,7 +58,7 @@
     }
     setInterval(function () {
         var idle = Date.now() - lastInteraction;
-        if (idle >= IDLE_MS) { location.href = '/logout?reason=idle'; }
+        if (idle >= IDLE_MS) { leaving = true; location.href = '/logout?reason=idle'; }
         else if (idle >= WARN_MS) { showBanner(); }
     }, 5000);
 

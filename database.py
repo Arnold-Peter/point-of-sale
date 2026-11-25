@@ -59,6 +59,13 @@ class Result:
 # ── Connection pool (much faster than reconnecting every request) ──
 _pool = queue.Queue(maxsize=10)
 
+def _tz_offset():
+    """This computer's UTC offset (e.g. '+03:00') so MySQL's NOW() matches your clock."""
+    minutes = int(datetime.datetime.now().astimezone().utcoffset().total_seconds() // 60)
+    sign = '+' if minutes >= 0 else '-'
+    minutes = abs(minutes)
+    return f'{sign}{minutes // 60:02d}:{minutes % 60:02d}'
+
 
 def _connect(with_db=True):
     return pymysql.connect(
@@ -67,7 +74,8 @@ def _connect(with_db=True):
         database=config.MYSQL_DATABASE if with_db else None,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor,
-        init_command="SET SESSION sql_mode=REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','')",
+        init_command=("SET SESSION sql_mode=REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''), "
+                      f"SESSION time_zone='{_tz_offset()}'"),
         autocommit=False)
 
 

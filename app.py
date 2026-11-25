@@ -16,6 +16,15 @@ app = Flask(__name__)
 app.secret_key = 'noddystore_secret_2024'
 app.jinja_env.filters['enumerate'] = enumerate
 app.jinja_env.globals['enumerate'] = enumerate
+def clock(value):
+    """'2026-11-25 14:05:09' -> '2:05:09 PM'"""
+    try:
+        return datetime.strptime(value, '%Y-%m-%d %H:%M:%S').strftime('%I:%M:%S %p').lstrip('0')
+    except (TypeError, ValueError):
+        return '—'
+
+
+app.jinja_env.filters['clock'] = clock
 app.teardown_appcontext(release_request_connections)
 
 # ── Activity settings ──────────────────────────────────
@@ -235,6 +244,8 @@ def api_heartbeat():
 
 @app.route('/api/online')
 @login_required
+@app.route('/api/online')
+@login_required
 def api_online():
     if session.get('role') != 'admin':
         return jsonify({'error': 'forbidden'}), 403
@@ -244,9 +255,20 @@ def api_online():
     return jsonify({'count': len(rows), 'users': [
         {'id': r['id'], 'full_name': r['full_name'], 'role': r['role'],
          'branch_name': r['branch_name'] or '—',
-         'since': r['since'], 'last_seen': r['last_seen']} for r in rows]})
+         'since': clock(r['since']), 'last_seen': clock(r['last_seen'])} for r in rows]})
 
 
+@app.route('/api/leave', methods=['POST'])
+def api_leave():
+    """Sent by the browser when a tab is closed, so 'last seen' is exact."""
+    sid = session.get('sid')
+    if sid:
+        conn = get_db()
+        conn.execute('UPDATE user_sessions SET last_seen=NOW() '
+                     'WHERE id=? AND logout_at IS NULL', (sid,))
+        conn.commit()
+        conn.close()
+    return ('', 204)
 # ── Dashboard ──────────────────────────────────────────
 @app.route('/')
 @login_required
@@ -350,15 +372,17 @@ def delete_branch(bid):
 @admin_required
 def users():
     conn = get_db()
-    rows = conn.execute('''
-        SELECT u.*, b.name AS branch_name
+    rows = conn.execute(f'''
+        SELECT u.*, b.name AS branch_name,
+          EXISTS(SELECT 1 FROM user_sessions s
+                 WHERE s.user_id=u.id AND s.logout_at IS NULL
+                   AND s.last_seen >= DATE_SUB(NOW(), INTERVAL {IDLE_SECONDS} SECOND)) AS is_online
         FROM users u LEFT JOIN branches b ON u.branch_id=b.id
         ORDER BY u.full_name
     ''').fetchall()
     branches = conn.execute('SELECT * FROM branches ORDER BY name').fetchall()
     conn.close()
     return render_template('users.html', users=rows, branches=branches)
-
 
 @app.route('/users/add', methods=['POST'])
 @admin_required
@@ -1374,6 +1398,21 @@ def pay_salary(uid):
     return redirect(url_for('staff'))
 
 
+def worked_seconds(spans):
+    """Total time worked. Overlapping sessions (e.g. PC + phone) are merged."""
+    total, cur_start, cur_end = 0, None, None
+    for start, end in sorted(spans):
+        if cur_end is None or start > cur_end:
+            if cur_end is not None:
+                total += (cur_end - cur_start).total_seconds()
+            cur_start, cur_end = start, end
+        elif end > cur_end:
+            cur_end = end
+    if cur_end is not None:
+        total += (cur_end - cur_start).total_seconds()
+    return int(max(0, total))
+
+
 @app.route('/staff/attendance/report')
 @login_required
 def attendance_report():
@@ -1391,7 +1430,6 @@ def attendance_report():
         SELECT s.user_id, u.full_name, b.name AS branch_name,
                DATE(s.login_at) AS `day`, s.login_at, s.end_reason,
                COALESCE(s.logout_at, s.last_seen) AS ended_at,
-               TIMESTAMPDIFF(SECOND, s.login_at, COALESCE(s.logout_at, s.last_seen)) AS secs,
                {ACTIVE_SQL} AS is_active
         FROM user_sessions s
         JOIN users u ON s.user_id=u.id
@@ -1403,6 +1441,7 @@ def attendance_report():
     online = online_users(conn) if session.get('role') == 'admin' else []
     conn.close()
 
+    fmt = '%Y-%m-%d %H:%M:%S'
     days = {}
     for r in rows:
         key = (r['user_id'], r['day'])
@@ -1411,26 +1450,27 @@ def attendance_report():
             d = days[key] = {'date': r['day'], 'full_name': r['full_name'],
                              'branch_name': r['branch_name'] or '—',
                              'check_in': r['login_at'], 'last_end': '',
-                             'reason': None, 'secs': 0, 'active': False}
-        d['secs'] += max(0, r['secs'] or 0)
+                             'reason': None, 'active': False, 'spans': []}
+        d['spans'].append((datetime.strptime(r['login_at'], fmt),
+                           datetime.strptime(r['ended_at'], fmt)))
         if r['is_active']:
             d['active'] = True
-        if r['ended_at'] and r['ended_at'] >= d['last_end']:
+        if r['ended_at'] >= d['last_end']:
             d['last_end'], d['reason'] = r['ended_at'], r['end_reason']
 
     records = []
     for d in days.values():
-        h, m = divmod(d['secs'] // 60, 60)
+        secs = worked_seconds(d['spans'])
+        h, m = divmod(secs // 60, 60)
         if d['active']:
-            status, check_out = 'Active', '—'
+            status, check_out = 'Active', None
         else:
             status = 'Logged out' if d['reason'] == 'logout' else 'Timed out'
-            check_out = d['last_end'][11:16]
+            check_out = d['last_end']
         records.append({'date': d['date'], 'full_name': d['full_name'],
                         'branch_name': d['branch_name'],
-                        'check_in': d['check_in'][11:16], 'check_out': check_out,
-                        'hours': f'{h}h {m:02d}m', 'status': status,
-                        'secs': d['secs']})
+                        'check_in': d['check_in'], 'check_out': check_out,
+                        'hours': f'{h}h {m:02d}m', 'status': status, 'secs': secs})
     records.sort(key=lambda x: x['full_name'])
     records.sort(key=lambda x: x['date'], reverse=True)
 
@@ -1439,8 +1479,6 @@ def attendance_report():
     return render_template('attendance.html', records=records, month=month,
                            online=online, today_present=len(today_rows),
                            today_hours=f'{th}h {tm:02d}m')
-
-
 @app.route('/staff/performance')
 @login_required
 def staff_performance():

@@ -47,8 +47,8 @@
                 <td><strong>{{ u.full_name }}</strong></td>
                 <td><span class="badge badge-info">{{ u.role }}</span></td>
                 <td>{{ u.branch_name or '—' }}</td>
-                <td style="color:#00ff88">{{ u.since[11:16] }}</td>
-                <td style="color:#888">{{ u.last_seen[11:16] }}</td>
+                <td style="color:#00ff88">{{ u.since|clock }}</td>
+                <td style="color:#888">{{ u.last_seen|clock }}</td>
             </tr>
             {% else %}
             <tr><td colspan="5" style="text-align:center;color:#555;padding:20px">Nobody is signed in</td></tr>
@@ -84,8 +84,8 @@
                 <td>{{ r.date }}</td>
                 <td><strong>{{ r.full_name }}</strong></td>
                 <td>{{ r.branch_name }}</td>
-                <td style="color:#00ff88">{{ r.check_in }}</td>
-                <td style="color:#f39c12">{{ r.check_out }}</td>
+                <td style="color:#00ff88">{{ r.check_in|clock }}</td>
+                <td style="color:#f39c12">{% if r.check_out %}{{ r.check_out|clock }}{% else %}—{% endif %}</td>
                 <td style="font-weight:600">{{ r.hours }}</td>
                 <td>
                     <span class="badge badge-{% if r.status=='Active' %}success{% elif r.status=='Logged out' %}info{% else %}warning{% endif %}">
@@ -131,8 +131,8 @@ function refreshActive() {
                 tr.appendChild(cell(u.full_name, 'font-weight:bold'));
                 tr.appendChild(cell(u.role));
                 tr.appendChild(cell(u.branch_name));
-                tr.appendChild(cell(u.since.slice(11, 16), 'color:#00ff88'));
-                tr.appendChild(cell(u.last_seen.slice(11, 16), 'color:#888'));
+                tr.appendChild(cell(u.since, 'color:#00ff88'));
+                tr.appendChild(cell(u.last_seen, 'color:#888'));
                 body.appendChild(tr);
             });
         });
