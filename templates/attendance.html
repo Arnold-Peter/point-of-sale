@@ -1,21 +1,68 @@
 {% extends 'base.html' %}
-{% block title %}Attendance Report — Noddy Store{% endblock %}
+{% block title %}Attendance — Noddy Store{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h2>Attendance Report</h2>
-        <p>Monthly staff attendance records</p>
+        <h2>Attendance</h2>
+        <p>Recorded automatically when staff sign in and out. 5 minutes without activity counts as signed out.</p>
     </div>
-    <a href="/staff" class="btn btn-secondary">← Back</a>
+    <a href="/staff" class="btn btn-secondary">← Staff</a>
 </div>
 
-<!-- Month filter -->
-<div class="card" style="padding:12px 20px;margin-bottom:14px;">
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
+    {% if session.role == 'admin' %}
+    <div class="stat-card" style="border-color:#2a5a2a">
+        <div class="stat-icon" style="background:#0d2a1a">🟢</div>
+        <div class="stat-info">
+            <div class="number" style="color:#00ff88" id="online-count">{{ online|length }}</div>
+            <div class="label">Active Now</div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#0d1a2a">👥</div>
+        <div class="stat-info">
+            <div class="number" style="color:#4a9eff">{{ today_present }}</div>
+            <div class="label">Signed In Today</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background:#2a1a00">⏱</div>
+        <div class="stat-info">
+            <div class="number" style="color:#f39c12">{{ today_hours }}</div>
+            <div class="label">Hours Worked Today</div>
+        </div>
+    </div>
+</div>
+
+{% if session.role == 'admin' %}
+<div class="card" style="border-color:#2a5a2a;">
+    <div class="card-header"><h3>🟢 Active Now</h3>
+        <span style="color:#888;font-size:0.75rem">updates every 20 seconds</span></div>
+    <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Branch</th><th>Signed In</th><th>Last Activity</th></tr></thead>
+        <tbody id="online-body">
+            {% for u in online %}
+            <tr>
+                <td><strong>{{ u.full_name }}</strong></td>
+                <td><span class="badge badge-info">{{ u.role }}</span></td>
+                <td>{{ u.branch_name or '—' }}</td>
+                <td style="color:#00ff88">{{ u.since[11:16] }}</td>
+                <td style="color:#888">{{ u.last_seen[11:16] }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center;color:#555;padding:20px">Nobody is signed in</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="filter-bar">
     <form method="GET" style="display:flex;gap:10px;align-items:flex-end;">
         <div>
-            <label style="display:block;color:#888;font-size:0.72rem;margin-bottom:4px;text-transform:uppercase">Month</label>
-            <input type="month" name="month" value="{{ month }}"
-                   style="padding:8px 12px;background:#0f0f1a;border:1px solid #2a2a4a;border-radius:8px;color:#fff;outline:none;"/>
+            <span class="filter-label">Month</span>
+            <input type="month" name="month" value="{{ month }}"/>
         </div>
         <button type="submit" class="btn btn-primary">Filter</button>
     </form>
@@ -28,44 +75,69 @@
     </div>
     <table>
         <thead>
-            <tr>
-                <th>Date</th>
-                <th>Staff Name</th>
-                <th>Branch</th>
-                <th>Check In</th>
-                <th>Check Out</th>
-                <th>Hours</th>
-                <th>Status</th>
-            </tr>
+            <tr><th>Date</th><th>Staff</th><th>Branch</th><th>Check In</th>
+                <th>Check Out</th><th>Hours</th><th>Status</th></tr>
         </thead>
         <tbody>
             {% for r in records %}
-            {% set hours = '—' %}
-            {% if r.check_in and r.check_out %}
-                {% set h_in  = r.check_in[:5].split(':') %}
-                {% set h_out = r.check_out[:5].split(':') %}
-            {% endif %}
             <tr>
                 <td>{{ r.date }}</td>
                 <td><strong>{{ r.full_name }}</strong></td>
                 <td>{{ r.branch_name }}</td>
-                <td style="color:#00ff88">{{ r.check_in or '—' }}</td>
-                <td style="color:#f39c12">{{ r.check_out or 'Still in' }}</td>
-                <td style="color:#888">—</td>
+                <td style="color:#00ff88">{{ r.check_in }}</td>
+                <td style="color:#f39c12">{{ r.check_out }}</td>
+                <td style="font-weight:600">{{ r.hours }}</td>
                 <td>
-                    <span class="badge badge-{% if r.status=='present' %}success{% elif r.status=='late' %}warning{% else %}danger{% endif %}">
-                        {{ r.status }}
+                    <span class="badge badge-{% if r.status=='Active' %}success{% elif r.status=='Logged out' %}info{% else %}warning{% endif %}">
+                        {% if r.status=='Active' %}🟢 {% endif %}{{ r.status }}
                     </span>
                 </td>
             </tr>
             {% else %}
-            <tr>
-                <td colspan="7" style="text-align:center;color:#555;padding:24px">
-                    No attendance records for {{ month }}
-                </td>
-            </tr>
+            <tr><td colspan="7" style="text-align:center;color:#555;padding:28px">
+                No attendance for {{ month }} yet. It appears here as soon as staff sign in.
+            </td></tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if session.role == 'admin' %}
+<script>
+function cell(text, style) {
+    var td = document.createElement('td');
+    td.textContent = text;
+    if (style) td.style.cssText = style;
+    return td;
+}
+function refreshActive() {
+    fetch('/api/online', {credentials: 'same-origin'})
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+            if (!d) return;
+            document.getElementById('online-count').textContent = d.count;
+            var body = document.getElementById('online-body');
+            body.innerHTML = '';
+            if (!d.users.length) {
+                var tr = document.createElement('tr');
+                var td = cell('Nobody is signed in', 'text-align:center;color:#555;padding:20px');
+                td.colSpan = 5; tr.appendChild(td); body.appendChild(tr);
+                return;
+            }
+            d.users.forEach(function (u) {
+                var tr = document.createElement('tr');
+                tr.appendChild(cell(u.full_name, 'font-weight:bold'));
+                tr.appendChild(cell(u.role));
+                tr.appendChild(cell(u.branch_name));
+                tr.appendChild(cell(u.since.slice(11, 16), 'color:#00ff88'));
+                tr.appendChild(cell(u.last_seen.slice(11, 16), 'color:#888'));
+                body.appendChild(tr);
+            });
+        });
+}
+setInterval(refreshActive, 20000);
+</script>
+{% endif %}
 {% endblock %}

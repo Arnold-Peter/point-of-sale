@@ -1,9 +1,11 @@
 import datetime
 import decimal
+import queue
 import sys
 
 import pymysql
 import pymysql.cursors
+from flask import g, has_app_context
 
 import config
 
@@ -54,10 +56,49 @@ class Result:
                 for r in self._cur.fetchall()]
 
 
+# ── Connection pool (much faster than reconnecting every request) ──
+_pool = queue.Queue(maxsize=10)
+
+
+def _connect(with_db=True):
+    return pymysql.connect(
+        host=config.MYSQL_HOST, port=config.MYSQL_PORT,
+        user=config.MYSQL_USER, password=config.MYSQL_PASSWORD,
+        database=config.MYSQL_DATABASE if with_db else None,
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor,
+        init_command="SET SESSION sql_mode=REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','')",
+        autocommit=False)
+
+
+def _acquire():
+    try:
+        raw = _pool.get_nowait()
+    except queue.Empty:
+        return _connect()
+    try:
+        raw.ping(reconnect=True)
+        return raw
+    except Exception:
+        return _connect()
+
+
+def _release(raw):
+    try:
+        raw.rollback()          # never hand back a half-finished transaction
+        _pool.put_nowait(raw)
+    except Exception:           # pool full or connection broken
+        try:
+            raw.close()
+        except Exception:
+            pass
+
+
 class Connection:
     """Small wrapper so queries can use ? placeholders."""
     def __init__(self, raw):
         self._raw = raw
+        self._closed = False
 
     def execute(self, sql, params=None):
         if params:
@@ -76,22 +117,24 @@ class Connection:
         self._raw.rollback()
 
     def close(self):
-        self._raw.close()
-
-
-def _connect(with_db=True):
-    return pymysql.connect(
-        host=config.MYSQL_HOST, port=config.MYSQL_PORT,
-        user=config.MYSQL_USER, password=config.MYSQL_PASSWORD,
-        database=config.MYSQL_DATABASE if with_db else None,
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor,
-        init_command="SET SESSION sql_mode=REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','')",
-        autocommit=False)
+        if not self._closed:
+            self._closed = True
+            _release(self._raw)
 
 
 def get_db():
-    return Connection(_connect())
+    conn = Connection(_acquire())
+    if has_app_context():                      # make sure it is always returned
+        if not hasattr(g, '_db_conns'):
+            g._db_conns = []
+        g._db_conns.append(conn)
+    return conn
+
+
+def release_request_connections(exc=None):
+    for c in getattr(g, '_db_conns', []):
+        c.close()
+    g._db_conns = []
 
 
 SCHEMA = [
@@ -114,6 +157,22 @@ f"""CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_users_branch FOREIGN KEY (branch_id)
         REFERENCES branches(id) ON DELETE SET NULL
+) {T}""",
+
+# One row per login. Powers "active users" and automatic attendance.
+f"""CREATE TABLE IF NOT EXISTS user_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    branch_id INT NULL,
+    login_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    logout_at DATETIME NULL,
+    end_reason VARCHAR(10) NULL,
+    KEY idx_sess_user_login (user_id, login_at),
+    KEY idx_sess_login (login_at),
+    KEY idx_sess_active (logout_at, last_seen),
+    CONSTRAINT fk_sess_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
 ) {T}""",
 
 f"""CREATE TABLE IF NOT EXISTS login_logs (
@@ -228,6 +287,7 @@ f"""CREATE TABLE IF NOT EXISTS expenses (
         REFERENCES users(id) ON DELETE SET NULL
 ) {T}""",
 
+# Kept for old data. Attendance is now built from user_sessions.
 f"""CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -290,6 +350,15 @@ f"""CREATE TABLE IF NOT EXISTS mobile_money_transactions (
 ]
 
 
+def _ensure_index(conn, table, name, columns):
+    exists = conn.execute(
+        'SELECT COUNT(*) FROM information_schema.statistics '
+        'WHERE table_schema=DATABASE() AND table_name=? AND index_name=?',
+        (table, name)).fetchone()[0]
+    if not exists:
+        conn.execute(f'ALTER TABLE `{table}` ADD INDEX `{name}` ({columns})')
+
+
 def init_db():
     try:
         raw = _connect(with_db=False)
@@ -307,6 +376,14 @@ def init_db():
 
     for ddl in SCHEMA:
         conn.execute(ddl)
+    conn.commit()
+
+    # Speed: indexes for the branch + date filters used by every report
+    _ensure_index(conn, 'sales', 'idx_sales_branch_created', 'branch_id, created_at')
+    _ensure_index(conn, 'expenses', 'idx_exp_branch_created', 'branch_id, created_at')
+    _ensure_index(conn, 'mobile_money_transactions', 'idx_mm_branch_created',
+                  'branch_id, created_at')
+    _ensure_index(conn, 'products', 'idx_prod_active_branch', 'active, branch_id')
     conn.commit()
 
     if conn.execute('SELECT COUNT(*) FROM branches').fetchone()[0] == 0:

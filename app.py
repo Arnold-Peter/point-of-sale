@@ -1,6 +1,7 @@
 import io
 import random
 import string
+import time
 import datetime as dt
 from datetime import datetime
 from functools import wraps
@@ -8,13 +9,21 @@ from functools import wraps
 from flask import (Flask, render_template, request, redirect,
                    url_for, session, jsonify, flash, send_file)
 
-from database import init_db, get_db
+from database import init_db, get_db, release_request_connections
 from auth import verify_user, log_action, hash_password
 
 app = Flask(__name__)
 app.secret_key = 'noddystore_secret_2024'
 app.jinja_env.filters['enumerate'] = enumerate
 app.jinja_env.globals['enumerate'] = enumerate
+app.teardown_appcontext(release_request_connections)
+
+# ── Activity settings ──────────────────────────────────
+IDLE_SECONDS = 300            # 5 minutes without interaction = inactive (keep same as activity.js)
+TOUCH_EVERY = 30              # seconds between "last seen" writes to MySQL
+PASSIVE_ENDPOINTS = {'api_online'}   # background polling never counts as activity
+ACTIVE_SQL = (f"(s.logout_at IS NULL AND s.last_seen >= "
+              f"DATE_SUB(NOW(), INTERVAL {IDLE_SECONDS} SECOND))")
 
 
 # ── Helpers ────────────────────────────────────────────
@@ -46,6 +55,16 @@ def bf(column):
     return f"AND {column}={int(session.get('branch_id') or 0)}"
 
 
+def dr(col):
+    """Date-range filter that can use an index. Params: (date_from, date_to)."""
+    return f"{col} >= ? AND {col} < DATE_ADD(?, INTERVAL 1 DAY)"
+
+
+def mr(col):
+    """Month filter that can use an index. Params: (first_day, first_day)."""
+    return f"{col} >= ? AND {col} < DATE_ADD(?, INTERVAL 1 MONTH)"
+
+
 def generate_receipt_no():
     rand = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return f'RCP-{datetime.now().strftime("%Y%m%d")}-{rand}'
@@ -55,23 +74,23 @@ def pnl(conn, date_from, date_to):
     """Revenue, cost, gross and net profit for a date range."""
     bs, be = bf('s.branch_id'), bf('branch_id')
     sr = conn.execute(f'''
-        SELECT COALESCE(SUM(total_amount),0) AS revenue, COUNT(*) AS transactions
+        SELECT COALESCE(SUM(s.total_amount),0) AS revenue, COUNT(*) AS transactions
         FROM sales s
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
     ''', (date_from, date_to)).fetchone()
     cost = conn.execute(f'''
         SELECT COALESCE(SUM(si.quantity*p.buying_price),0)
         FROM sale_items si
         JOIN sales s ON si.sale_id=s.id
         JOIN products p ON si.product_id=p.id
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
     ''', (date_from, date_to)).fetchone()[0]
     expenses = conn.execute(f'''
         SELECT COALESCE(SUM(amount),0) FROM expenses
-        WHERE DATE(created_at) BETWEEN ? AND ? {be}
+        WHERE {dr('created_at')} {be}
     ''', (date_from, date_to)).fetchone()[0]
     revenue = sr['revenue']
-    gross   = revenue - cost
+    gross = revenue - cost
     return {
         'revenue': revenue, 'transactions': sr['transactions'],
         'cost': cost, 'gross_profit': gross, 'expenses': expenses,
@@ -80,16 +99,103 @@ def pnl(conn, date_from, date_to):
     }
 
 
+# ── Session tracking (active users + attendance) ───────
+def start_session(user):
+    conn = get_db()
+    cur = conn.execute(
+        'INSERT INTO user_sessions (user_id, branch_id) VALUES (?,?)',
+        (user['id'], user['branch_id']))
+    conn.commit()
+    sid = cur.lastrowid
+    conn.close()
+    return sid
+
+
+def end_session(sid, reason):
+    """reason='logout' ends now; reason='timeout' ends at the last activity."""
+    if not sid:
+        return
+    conn = get_db()
+    if reason == 'timeout':
+        conn.execute("UPDATE user_sessions SET logout_at=last_seen, end_reason='timeout' "
+                     "WHERE id=? AND logout_at IS NULL", (sid,))
+    else:
+        conn.execute("UPDATE user_sessions SET logout_at=NOW(), last_seen=NOW(), "
+                     "end_reason='logout' WHERE id=? AND logout_at IS NULL", (sid,))
+    conn.commit()
+    conn.close()
+
+
+def touch_session(sid, user_id):
+    """Refresh last_seen. Returns False if the account was disabled or deleted."""
+    conn = get_db()
+    if sid:
+        conn.execute('UPDATE user_sessions SET last_seen=NOW() '
+                     'WHERE id=? AND logout_at IS NULL', (sid,))
+    row = conn.execute('SELECT active FROM users WHERE id=?', (user_id,)).fetchone()
+    conn.commit()
+    conn.close()
+    return bool(row and row['active'])
+
+
+def online_users(conn, scope=''):
+    return conn.execute(f'''
+        SELECT u.id, u.full_name, u.`role`, b.name AS branch_name,
+               MIN(s.login_at) AS since, MAX(s.last_seen) AS last_seen
+        FROM user_sessions s
+        JOIN users u ON s.user_id=u.id
+        LEFT JOIN branches b ON u.branch_id=b.id
+        WHERE s.logout_at IS NULL
+          AND s.last_seen >= DATE_SUB(NOW(), INTERVAL {IDLE_SECONDS} SECOND) {scope}
+        GROUP BY u.id, u.full_name, u.`role`, b.name
+        ORDER BY u.full_name
+    ''').fetchall()
+
+
+def force_logout(message, reason):
+    end_session(session.get('sid'), reason)
+    session.clear()
+    session['login_notice'] = message
+    if request.path.startswith('/api/') or request.path == '/pos/checkout':
+        return jsonify({'success': False, 'expired': True, 'message': message}), 401
+    return redirect(url_for('login'))
+
+
+@app.before_request
+def track_activity():
+    if request.endpoint in (None, 'static', 'login') or 'user_id' not in session:
+        return
+    now = time.time()
+    last = session.get('last_active', now)
+    if now - last > IDLE_SECONDS:
+        return force_logout('You were signed out after 5 minutes of inactivity. '
+                            'Please sign in again.', 'timeout')
+    if request.endpoint in PASSIVE_ENDPOINTS:
+        return
+    if now - last > 5:
+        session['last_active'] = now
+    if now - session.get('last_touch', 0) > TOUCH_EVERY:
+        session['last_touch'] = now
+        try:
+            if not touch_session(session.get('sid'), session['user_id']):
+                return force_logout('Your account is no longer active.', 'logout')
+        except Exception:
+            pass          # tracking must never break a page
+
+
 # ── Auth ───────────────────────────────────────────────
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session:
         return redirect(url_for('dashboard'))
-    error = None
+    error = session.pop('login_notice', None)
     if request.method == 'POST':
         user = verify_user(request.form.get('username', '').strip(),
                            request.form.get('password', ''))
         if user:
+            sid = start_session(user)
+            session.clear()
+            now = time.time()
             session.update({
                 'user_id':     user['id'],
                 'username':    user['username'],
@@ -97,6 +203,9 @@ def login():
                 'role':        user['role'],
                 'branch_id':   user['branch_id'],
                 'branch_name': user['branch_name'] or 'All Branches',
+                'sid':         sid,
+                'last_active': now,
+                'last_touch':  now,
             })
             log_action(user['id'], user['username'], 'login')
             return redirect(url_for('dashboard'))
@@ -107,16 +216,42 @@ def login():
 @app.route('/logout')
 def logout():
     if 'user_id' in session:
+        idle = request.args.get('reason') == 'idle'
+        end_session(session.get('sid'), 'timeout' if idle else 'logout')
         log_action(session['user_id'], session['username'], 'logout')
-    session.clear()
+        session.clear()
+        if idle:
+            session['login_notice'] = ('You were signed out after 5 minutes of '
+                                       'inactivity. Please sign in again.')
     return redirect(url_for('login'))
+
+
+@app.route('/api/heartbeat', methods=['POST'])
+@login_required
+def api_heartbeat():
+    # track_activity() has already refreshed the session
+    return jsonify({'ok': True})
+
+
+@app.route('/api/online')
+@login_required
+def api_online():
+    if session.get('role') != 'admin':
+        return jsonify({'error': 'forbidden'}), 403
+    conn = get_db()
+    rows = online_users(conn)
+    conn.close()
+    return jsonify({'count': len(rows), 'users': [
+        {'id': r['id'], 'full_name': r['full_name'], 'role': r['role'],
+         'branch_name': r['branch_name'] or '—',
+         'since': r['since'], 'last_seen': r['last_seen']} for r in rows]})
 
 
 # ── Dashboard ──────────────────────────────────────────
 @app.route('/')
 @login_required
 def dashboard():
-    conn  = get_db()
+    conn = get_db()
     today = datetime.now().strftime('%Y-%m-%d')
     bs, be, bp = bf('s.branch_id'), bf('branch_id'), bf('p.branch_id')
     pl = pnl(conn, today, today)
@@ -161,8 +296,8 @@ def dashboard():
     mm_today = conn.execute(f'''
         SELECT COALESCE(SUM(amount),0) AS total, COUNT(*) AS `count`
         FROM mobile_money_transactions
-        WHERE DATE(created_at)=? AND `type`='credit' {be}
-    ''', (today,)).fetchone()
+        WHERE {dr('created_at')} AND `type`='credit' {be}
+    ''', (today, today)).fetchone()
 
     conn.close()
     return render_template('dashboard.html',
@@ -269,7 +404,7 @@ def edit_user(uid):
 @admin_required
 def change_password(uid):
     new_pass = request.form.get('new_password', '')
-    confirm  = request.form.get('confirm_password', '')
+    confirm = request.form.get('confirm_password', '')
     if len(new_pass) < 4:
         flash('Password must be at least 4 characters!', 'error')
     elif new_pass != confirm:
@@ -313,7 +448,7 @@ def toggle_user(uid):
     conn.execute('UPDATE users SET active=1-active WHERE id=?', (uid,))
     conn.commit()
     conn.close()
-    flash('User status updated!', 'success')
+    flash('User status updated! A disabled user is signed out within 30 seconds.', 'success')
     return redirect(url_for('users'))
 
 
@@ -323,9 +458,9 @@ def change_own_password():
     conn = get_db()
     user = conn.execute('SELECT password FROM users WHERE id=?',
                         (session['user_id'],)).fetchone()
-    current  = request.form.get('current_password', '')
+    current = request.form.get('current_password', '')
     new_pass = request.form.get('new_password', '')
-    confirm  = request.form.get('confirm_password', '')
+    confirm = request.form.get('confirm_password', '')
     if user['password'] != hash_password(current):
         flash('Current password is incorrect!', 'error')
     elif new_pass != confirm:
@@ -434,9 +569,9 @@ def delete_category(cid):
 @app.route('/products')
 @login_required
 def products():
-    conn    = get_db()
-    search  = request.args.get('q', '')
-    cat_id  = request.args.get('cat', '')
+    conn = get_db()
+    search = request.args.get('q', '')
+    cat_id = request.args.get('cat', '')
     dept_id = request.args.get('dept', '')
     bp = bf('p.branch_id')
 
@@ -459,9 +594,9 @@ def products():
         params.append(dept_id)
     query += ' ORDER BY p.name'
 
-    prods    = conn.execute(query, params).fetchall()
-    cats     = conn.execute('SELECT * FROM categories ORDER BY name').fetchall()
-    depts    = conn.execute('SELECT * FROM departments ORDER BY name').fetchall()
+    prods = conn.execute(query, params).fetchall()
+    cats = conn.execute('SELECT * FROM categories ORDER BY name').fetchall()
+    depts = conn.execute('SELECT * FROM departments ORDER BY name').fetchall()
     branches = conn.execute('SELECT * FROM branches ORDER BY name').fetchall()
     conn.close()
     return render_template('products.html', prods=prods, cats=cats, depts=depts,
@@ -520,9 +655,9 @@ def edit_product(pid):
             flash(f'Error: {e}', 'error')
         conn.close()
         return redirect(url_for('products'))
-    prod     = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
-    cats     = conn.execute('SELECT * FROM categories ORDER BY name').fetchall()
-    depts    = conn.execute('SELECT * FROM departments ORDER BY name').fetchall()
+    prod = conn.execute('SELECT * FROM products WHERE id=?', (pid,)).fetchone()
+    cats = conn.execute('SELECT * FROM categories ORDER BY name').fetchall()
+    depts = conn.execute('SELECT * FROM departments ORDER BY name').fetchall()
     branches = conn.execute('SELECT * FROM branches ORDER BY name').fetchall()
     conn.close()
     return render_template('edit_product.html', prod=prod, cats=cats,
@@ -578,7 +713,7 @@ def stock():
 @login_required
 def adjust_stock(pid):
     conn = get_db()
-    qty  = int(request.form.get('qty', 0))
+    qty = int(request.form.get('qty', 0))
     if request.form.get('mode', 'add') == 'add':
         conn.execute('UPDATE products SET stock_qty=stock_qty+? WHERE id=?', (qty, pid))
     else:
@@ -593,11 +728,11 @@ def adjust_stock(pid):
 @app.route('/stock/transfer', methods=['POST'])
 @login_required
 def transfer_stock():
-    conn   = get_db()
-    pid    = int(request.form['product_id'])
+    conn = get_db()
+    pid = int(request.form['product_id'])
     from_b = int(request.form['from_branch'])
-    to_b   = int(request.form['to_branch'])
-    qty    = int(request.form['quantity'])
+    to_b = int(request.form['to_branch'])
+    qty = int(request.form['quantity'])
     src = conn.execute('SELECT * FROM products WHERE id=? AND branch_id=?',
                        (pid, from_b)).fetchone()
     if from_b == to_b or qty < 1 or not src or src['stock_qty'] < qty:
@@ -668,7 +803,7 @@ def add_customer():
 @app.route('/customers/pay/<int:cid>', methods=['POST'])
 @login_required
 def customer_pay(cid):
-    conn   = get_db()
+    conn = get_db()
     amount = float(request.form.get('amount', 0))
     conn.execute(
         'UPDATE customers SET debit_balance=GREATEST(0, debit_balance-?) WHERE id=?',
@@ -704,19 +839,19 @@ def pos():
 @app.route('/pos/checkout', methods=['POST'])
 @login_required
 def checkout():
-    data        = request.get_json()
-    cart        = data.get('cart', [])
-    payment     = data.get('payment_type', 'cash')
+    data = request.get_json()
+    cart = data.get('cart', [])
+    payment = data.get('payment_type', 'cash')
     paid_amount = float(data.get('paid_amount', 0))
     customer_id = data.get('customer_id') or None
-    notes       = data.get('notes', '')
+    notes = data.get('notes', '')
     if not cart:
         return jsonify({'success': False, 'message': 'Cart is empty!'})
 
-    conn      = get_db()
+    conn = get_db()
     branch_id = session.get('branch_id') or 1
-    total     = sum(float(i['price']) * int(i['qty']) for i in cart)
-    change    = max(0, paid_amount - total)
+    total = sum(float(i['price']) * int(i['qty']) for i in cart)
+    change = max(0, paid_amount - total)
 
     for item in cart:
         prod = conn.execute('SELECT stock_qty, name FROM products WHERE id=?',
@@ -782,10 +917,10 @@ def checkout():
 @app.route('/sales')
 @login_required
 def sales():
-    conn      = get_db()
-    today     = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db()
+    today = datetime.now().strftime('%Y-%m-%d')
     date_from = request.args.get('from', today)
-    date_to   = request.args.get('to', today)
+    date_to = request.args.get('to', today)
     bs = bf('s.branch_id')
     sale_list = conn.execute(f'''
         SELECT s.*, u.full_name AS cashier, b.name AS branch_name,
@@ -794,13 +929,13 @@ def sales():
         LEFT JOIN users u ON s.user_id=u.id
         LEFT JOIN branches b ON s.branch_id=b.id
         LEFT JOIN customers c ON s.customer_id=c.id
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
         ORDER BY s.created_at DESC
     ''', (date_from, date_to)).fetchall()
     totals = conn.execute(f'''
         SELECT COALESCE(SUM(total_amount),0) AS total, COUNT(*) AS `count`
         FROM sales s
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
     ''', (date_from, date_to)).fetchone()
     conn.close()
     return render_template('sales.html', sale_list=sale_list, totals=totals,
@@ -833,27 +968,28 @@ def sale_detail(sid):
 @app.route('/expenses')
 @login_required
 def expenses():
-    conn  = get_db()
+    conn = get_db()
     month = request.args.get('from', datetime.now().strftime('%Y-%m'))
+    first = month + '-01'
     be_e, be = bf('e.branch_id'), bf('branch_id')
     exps = conn.execute(f'''
         SELECT e.*, b.name AS branch_name, u.full_name AS recorded_by_name
         FROM expenses e
         LEFT JOIN branches b ON e.branch_id=b.id
         LEFT JOIN users u ON e.recorded_by=u.id
-        WHERE DATE_FORMAT(e.created_at,'%Y-%m')=? {be_e}
+        WHERE {mr('e.created_at')} {be_e}
         ORDER BY e.created_at DESC
-    ''', (month,)).fetchall()
+    ''', (first, first)).fetchall()
     total_exp = conn.execute(f'''
         SELECT COALESCE(SUM(amount),0) FROM expenses
-        WHERE DATE_FORMAT(created_at,'%Y-%m')=? {be}
-    ''', (month,)).fetchone()[0]
+        WHERE {mr('created_at')} {be}
+    ''', (first, first)).fetchone()[0]
     by_cat = conn.execute(f'''
         SELECT category, COALESCE(SUM(amount),0) AS total
         FROM expenses
-        WHERE DATE_FORMAT(created_at,'%Y-%m')=? {be}
+        WHERE {mr('created_at')} {be}
         GROUP BY category ORDER BY total DESC
-    ''', (month,)).fetchall()
+    ''', (first, first)).fetchall()
     branches = conn.execute('SELECT * FROM branches ORDER BY name').fetchall()
     conn.close()
     return render_template('expenses.html', exps=exps, total_exp=total_exp,
@@ -893,7 +1029,7 @@ def generate_expense_advice(revenue, gross_profit, net_profit,
     if revenue == 0:
         return [{'type': 'info', 'title': 'No sales data yet',
                  'message': 'Record some sales to get financial advice.'}]
-    advice    = []
+    advice = []
     exp_ratio = total_expenses / revenue * 100
     if net_profit < 0:
         advice.append({'type': 'danger', 'title': 'Business is running at a loss!',
@@ -934,10 +1070,10 @@ def generate_expense_advice(revenue, gross_profit, net_profit,
 @app.route('/reports')
 @login_required
 def reports():
-    conn   = get_db()
+    conn = get_db()
     period = request.args.get('period', 'daily')
-    now    = datetime.now()
-    today  = now.strftime('%Y-%m-%d')
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
     if period == 'daily':
         date_from = date_to = today
     elif period == 'weekly':
@@ -948,7 +1084,7 @@ def reports():
         date_from, date_to = now.strftime('%Y-01-01'), today
     else:
         date_from = request.args.get('from', today)
-        date_to   = request.args.get('to', today)
+        date_to = request.args.get('to', today)
 
     bs, be = bf('s.branch_id'), bf('branch_id')
     pl = pnl(conn, date_from, date_to)
@@ -957,7 +1093,7 @@ def reports():
         SELECT DATE(s.created_at) AS `day`,
                COALESCE(SUM(s.total_amount),0) AS total, COUNT(*) AS txns
         FROM sales s
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
         GROUP BY DATE(s.created_at) ORDER BY `day`
     ''', (date_from, date_to)).fetchall()
 
@@ -971,7 +1107,7 @@ def reports():
         JOIN sales s ON si.sale_id=s.id
         JOIN products p ON si.product_id=p.id
         LEFT JOIN categories c ON p.category_id=c.id
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
         GROUP BY p.id, p.name, c.name
         ORDER BY qty_sold DESC LIMIT 10
     ''', (date_from, date_to)).fetchall()
@@ -984,7 +1120,7 @@ def reports():
         JOIN products p ON si.product_id=p.id
         LEFT JOIN categories c ON p.category_id=c.id
         LEFT JOIN departments d ON c.department_id=d.id
-        WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+        WHERE {dr('s.created_at')} {bs}
         GROUP BY c.id, c.name, d.name
         ORDER BY revenue DESC LIMIT 8
     ''', (date_from, date_to)).fetchall()
@@ -992,7 +1128,7 @@ def reports():
     exp_by_cat = conn.execute(f'''
         SELECT category, COALESCE(SUM(amount),0) AS total
         FROM expenses
-        WHERE DATE(created_at) BETWEEN ? AND ? {be}
+        WHERE {dr('created_at')} {be}
         GROUP BY category ORDER BY total DESC
     ''', (date_from, date_to)).fetchall()
     conn.close()
@@ -1020,9 +1156,9 @@ def report_pdf():
                                         Paragraph, Spacer)
         from reportlab.lib.styles import getSampleStyleSheet
 
-        today     = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now().strftime('%Y-%m-%d')
         date_from = request.args.get('from', today)
-        date_to   = request.args.get('to', today)
+        date_to = request.args.get('to', today)
         conn = get_db()
         bs, be = bf('s.branch_id'), bf('branch_id')
         pl = pnl(conn, date_from, date_to)
@@ -1032,12 +1168,12 @@ def report_pdf():
             FROM sale_items si
             JOIN sales s ON si.sale_id=s.id
             JOIN products p ON si.product_id=p.id
-            WHERE DATE(s.created_at) BETWEEN ? AND ? {bs}
+            WHERE {dr('s.created_at')} {bs}
             GROUP BY p.id, p.name ORDER BY qty DESC LIMIT 15
         ''', (date_from, date_to)).fetchall()
         exp_cats = conn.execute(f'''
             SELECT category, COALESCE(SUM(amount),0) AS total
-            FROM expenses WHERE DATE(created_at) BETWEEN ? AND ? {be}
+            FROM expenses WHERE {dr('created_at')} {be}
             GROUP BY category ORDER BY total DESC
         ''', (date_from, date_to)).fetchall()
         conn.close()
@@ -1045,10 +1181,10 @@ def report_pdf():
         revenue, net = pl['revenue'], pl['net_profit']
         pct = lambda v: f'{(v / revenue * 100) if revenue else 0:.1f}%'
 
-        buf  = io.BytesIO()
-        doc  = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=40, bottomMargin=40)
         styl = getSampleStyleSheet()
-        els  = [
+        els = [
             Paragraph('NODDY STORE - FINANCIAL REPORT', styl['Title']),
             Paragraph(f'Period: {date_from} to {date_to} | Branch: {session["branch_name"]} | '
                       f'Generated by: {session["full_name"]} | '
@@ -1113,7 +1249,7 @@ def report_pdf():
 
 # ── Staff ──────────────────────────────────────────────
 def get_staff_recommendation(conn):
-    be  = bf('branch_id')
+    be = bf('branch_id')
     avg = conn.execute(f'''
         SELECT AVG(t.c) FROM (
             SELECT COUNT(*) AS c FROM sales
@@ -1150,9 +1286,12 @@ def staff():
           COALESCE((SELECT sal.paid FROM salaries sal
                     WHERE sal.user_id=u.id
                       AND sal.`month`=DATE_FORMAT(NOW(),'%Y-%m')),0) AS salary_paid,
-          (SELECT COUNT(*) FROM attendance a
-           WHERE a.user_id=u.id
-             AND DATE_FORMAT(a.`date`,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')) AS attendance_days
+          (SELECT COUNT(DISTINCT DATE(ss.login_at)) FROM user_sessions ss
+           WHERE ss.user_id=u.id
+             AND ss.login_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')) AS attendance_days,
+          EXISTS(SELECT 1 FROM user_sessions ss
+                 WHERE ss.user_id=u.id AND ss.logout_at IS NULL
+                   AND ss.last_seen >= DATE_SUB(NOW(), INTERVAL {IDLE_SECONDS} SECOND)) AS is_online
         FROM users u
         LEFT JOIN branches b ON u.branch_id=b.id
         WHERE u.role<>'admin' {bu}
@@ -1164,8 +1303,9 @@ def staff():
         WHERE `month`=DATE_FORMAT(NOW(),'%Y-%m') {be}
     ''').fetchone()[0]
     attendance_today = conn.execute(f'''
-        SELECT COUNT(*) FROM attendance
-        WHERE `date`=CURDATE() AND status='present' {be}
+        SELECT COUNT(DISTINCT ss.user_id)
+        FROM user_sessions ss JOIN users u ON ss.user_id=u.id
+        WHERE ss.login_at >= CURDATE() AND u.role<>'admin' {bu}
     ''').fetchone()[0]
     recommendation = get_staff_recommendation(conn)
     conn.close()
@@ -1176,42 +1316,19 @@ def staff():
 
 
 @app.route('/staff/attendance', methods=['POST'])
-@login_required
-def mark_attendance():
-    conn = get_db()
-    uid  = request.form['user_id']
-    u    = conn.execute('SELECT branch_id FROM users WHERE id=?', (uid,)).fetchone()
-    conn.execute('''
-        INSERT INTO attendance (user_id, branch_id, `date`, check_in, status)
-        VALUES (?,?,CURDATE(),CURTIME(),?)
-        ON DUPLICATE KEY UPDATE status=VALUES(status)
-    ''', (uid, (u['branch_id'] if u else None) or session.get('branch_id'),
-          request.form.get('status', 'present')))
-    conn.commit()
-    conn.close()
-    flash('Attendance marked!', 'success')
-    return redirect(url_for('staff'))
-
-
 @app.route('/staff/checkout/<int:uid>', methods=['POST'])
 @login_required
-def staff_checkout(uid):
-    conn = get_db()
-    conn.execute(
-        'UPDATE attendance SET check_out=CURTIME() WHERE user_id=? AND `date`=CURDATE()',
-        (uid,))
-    conn.commit()
-    conn.close()
-    flash('Check-out recorded!', 'success')
-    return redirect(url_for('staff'))
+def manual_attendance_disabled(uid=None):
+    flash('Attendance is now automatic: it is recorded when staff sign in and out.', 'success')
+    return redirect(url_for('attendance_report'))
 
 
 @app.route('/staff/salary/set', methods=['POST'])
 @login_required
 def set_salary():
     conn = get_db()
-    uid  = request.form['user_id']
-    u    = conn.execute('SELECT branch_id FROM users WHERE id=?', (uid,)).fetchone()
+    uid = request.form['user_id']
+    u = conn.execute('SELECT branch_id FROM users WHERE id=?', (uid,)).fetchone()
     try:
         conn.execute('''
             INSERT INTO salaries (user_id, branch_id, amount, `month`)
@@ -1240,7 +1357,7 @@ def pay_salary(uid):
     if not sal:
         flash('Set a salary for this staff member first.', 'error')
     elif sal['paid']:
-        flash('This month\'s salary was already paid.', 'error')
+        flash("This month's salary was already paid.", 'error')
     else:
         conn.execute('''
             UPDATE salaries SET paid=1, paid_at=NOW()
@@ -1260,41 +1377,92 @@ def pay_salary(uid):
 @app.route('/staff/attendance/report')
 @login_required
 def attendance_report():
-    conn  = get_db()
-    month = request.args.get('month', datetime.now().strftime('%Y-%m'))
-    records = conn.execute(f'''
-        SELECT a.*, u.full_name, b.name AS branch_name
-        FROM attendance a
-        JOIN users u ON a.user_id=u.id
-        LEFT JOIN branches b ON a.branch_id=b.id
-        WHERE DATE_FORMAT(a.`date`,'%Y-%m')=? {bf('a.branch_id')}
-        ORDER BY a.`date` DESC, u.full_name
-    ''', (month,)).fetchall()
+    conn = get_db()
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+    month = request.args.get('month', now.strftime('%Y-%m'))
+    first = month + '-01'
+    if session.get('role') == 'cashier':          # cashiers only see themselves
+        scope = f"AND u.id={int(session['user_id'])}"
+    else:
+        scope = bf('u.branch_id')
+
+    rows = conn.execute(f'''
+        SELECT s.user_id, u.full_name, b.name AS branch_name,
+               DATE(s.login_at) AS `day`, s.login_at, s.end_reason,
+               COALESCE(s.logout_at, s.last_seen) AS ended_at,
+               TIMESTAMPDIFF(SECOND, s.login_at, COALESCE(s.logout_at, s.last_seen)) AS secs,
+               {ACTIVE_SQL} AS is_active
+        FROM user_sessions s
+        JOIN users u ON s.user_id=u.id
+        LEFT JOIN branches b ON u.branch_id=b.id
+        WHERE {mr('s.login_at')} {scope}
+        ORDER BY s.login_at
+    ''', (first, first)).fetchall()
+
+    online = online_users(conn) if session.get('role') == 'admin' else []
     conn.close()
-    return render_template('attendance.html', records=records, month=month)
+
+    days = {}
+    for r in rows:
+        key = (r['user_id'], r['day'])
+        d = days.get(key)
+        if d is None:
+            d = days[key] = {'date': r['day'], 'full_name': r['full_name'],
+                             'branch_name': r['branch_name'] or '—',
+                             'check_in': r['login_at'], 'last_end': '',
+                             'reason': None, 'secs': 0, 'active': False}
+        d['secs'] += max(0, r['secs'] or 0)
+        if r['is_active']:
+            d['active'] = True
+        if r['ended_at'] and r['ended_at'] >= d['last_end']:
+            d['last_end'], d['reason'] = r['ended_at'], r['end_reason']
+
+    records = []
+    for d in days.values():
+        h, m = divmod(d['secs'] // 60, 60)
+        if d['active']:
+            status, check_out = 'Active', '—'
+        else:
+            status = 'Logged out' if d['reason'] == 'logout' else 'Timed out'
+            check_out = d['last_end'][11:16]
+        records.append({'date': d['date'], 'full_name': d['full_name'],
+                        'branch_name': d['branch_name'],
+                        'check_in': d['check_in'][11:16], 'check_out': check_out,
+                        'hours': f'{h}h {m:02d}m', 'status': status,
+                        'secs': d['secs']})
+    records.sort(key=lambda x: x['full_name'])
+    records.sort(key=lambda x: x['date'], reverse=True)
+
+    today_rows = [x for x in records if x['date'] == today]
+    th, tm = divmod(sum(x['secs'] for x in today_rows) // 60, 60)
+    return render_template('attendance.html', records=records, month=month,
+                           online=online, today_present=len(today_rows),
+                           today_hours=f'{th}h {tm:02d}m')
 
 
 @app.route('/staff/performance')
 @login_required
 def staff_performance():
-    conn  = get_db()
+    conn = get_db()
     month = request.args.get('month', datetime.now().strftime('%Y-%m'))
+    first = month + '-01'
     bs, bu = bf('s.branch_id'), bf('u.branch_id')
     perf = conn.execute(f'''
         SELECT u.id, u.full_name, u.role, b.name AS branch_name,
           (SELECT COUNT(*) FROM sales s
-           WHERE s.user_id=u.id AND DATE_FORMAT(s.created_at,'%Y-%m')=? {bs}) AS total_sales,
+           WHERE s.user_id=u.id AND {mr('s.created_at')} {bs}) AS total_sales,
           (SELECT COALESCE(SUM(s.total_amount),0) FROM sales s
-           WHERE s.user_id=u.id AND DATE_FORMAT(s.created_at,'%Y-%m')=? {bs}) AS total_revenue,
-          (SELECT COUNT(*) FROM attendance a
-           WHERE a.user_id=u.id AND DATE_FORMAT(a.`date`,'%Y-%m')=?) AS days_present,
+           WHERE s.user_id=u.id AND {mr('s.created_at')} {bs}) AS total_revenue,
+          (SELECT COUNT(DISTINCT DATE(ss.login_at)) FROM user_sessions ss
+           WHERE ss.user_id=u.id AND {mr('ss.login_at')}) AS days_present,
           COALESCE((SELECT sal.amount FROM salaries sal
                     WHERE sal.user_id=u.id AND sal.`month`=?),0) AS salary
         FROM users u
         LEFT JOIN branches b ON u.branch_id=b.id
         WHERE u.role<>'admin' AND u.active=1 {bu}
         ORDER BY total_revenue DESC
-    ''', (month, month, month, month)).fetchall()
+    ''', (first, first, first, first, first, first, month)).fetchall()
     conn.close()
     return render_template('staff_performance.html', performance=perf, month=month)
 
@@ -1310,24 +1478,23 @@ def branch_overview():
         bid = b['id']
         ts = conn.execute('''
             SELECT COALESCE(SUM(total_amount),0) AS revenue, COUNT(*) AS transactions
-            FROM sales WHERE branch_id=? AND DATE(created_at)=CURDATE()
+            FROM sales WHERE branch_id=? AND created_at >= CURDATE()
         ''', (bid,)).fetchone()
         ms = conn.execute('''
             SELECT COALESCE(SUM(total_amount),0) AS revenue, COUNT(*) AS transactions
             FROM sales
-            WHERE branch_id=? AND DATE_FORMAT(created_at,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')
+            WHERE branch_id=? AND created_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
         ''', (bid,)).fetchone()
         me = conn.execute('''
             SELECT COALESCE(SUM(amount),0) FROM expenses
-            WHERE branch_id=? AND DATE_FORMAT(created_at,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')
+            WHERE branch_id=? AND created_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
         ''', (bid,)).fetchone()[0]
         mc = conn.execute('''
             SELECT COALESCE(SUM(si.quantity*p.buying_price),0)
             FROM sale_items si
             JOIN sales s ON si.sale_id=s.id
             JOIN products p ON si.product_id=p.id
-            WHERE s.branch_id=?
-              AND DATE_FORMAT(s.created_at,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')
+            WHERE s.branch_id=? AND s.created_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
         ''', (bid,)).fetchone()[0]
         sc = conn.execute(
             "SELECT COUNT(*) FROM users WHERE branch_id=? AND active=1 AND role<>'admin'",
@@ -1375,11 +1542,11 @@ def branch_overview():
 @app.route('/mobile_money')
 @login_required
 def mobile_money():
-    conn      = get_db()
-    today     = datetime.now().strftime('%Y-%m-%d')
+    conn = get_db()
+    today = datetime.now().strftime('%Y-%m-%d')
     date_from = request.args.get('from', today)
-    date_to   = request.args.get('to', today)
-    provider  = request.args.get('provider', '')
+    date_to = request.args.get('to', today)
+    provider = request.args.get('provider', '')
     bm = bf('m.branch_id')
 
     pf, params = '', [date_from, date_to]
@@ -1392,7 +1559,7 @@ def mobile_money():
         FROM mobile_money_transactions m
         LEFT JOIN branches b ON m.branch_id=b.id
         LEFT JOIN users u ON m.recorded_by=u.id
-        WHERE DATE(m.created_at) BETWEEN ? AND ? {bm} {pf}
+        WHERE {dr('m.created_at')} {bm} {pf}
         ORDER BY m.created_at DESC
     ''', params).fetchall()
 
@@ -1402,7 +1569,7 @@ def mobile_money():
                COALESCE(SUM(CASE WHEN m.`type`='debit'  THEN m.amount ELSE 0 END),0) AS total_debited,
                COUNT(*) AS `count`
         FROM mobile_money_transactions m
-        WHERE DATE(m.created_at) BETWEEN ? AND ? {bm}
+        WHERE {dr('m.created_at')} {bm}
         GROUP BY m.provider
     ''', (date_from, date_to)).fetchall()
 
@@ -1411,7 +1578,7 @@ def mobile_money():
                COALESCE(SUM(CASE WHEN m.`type`='debit'  THEN m.amount ELSE 0 END),0) AS total_debited,
                COUNT(*) AS `count`
         FROM mobile_money_transactions m
-        WHERE DATE(m.created_at) BETWEEN ? AND ? {bm}
+        WHERE {dr('m.created_at')} {bm}
     ''', (date_from, date_to)).fetchone()
 
     branches = conn.execute('SELECT * FROM branches ORDER BY name').fetchall()
@@ -1479,7 +1646,7 @@ def api_branch_chart():
     for b in conn.execute('SELECT * FROM branches ORDER BY name').fetchall():
         rev = conn.execute('''
             SELECT COALESCE(SUM(total_amount),0) FROM sales
-            WHERE branch_id=? AND DATE_FORMAT(created_at,'%Y-%m')=DATE_FORMAT(NOW(),'%Y-%m')
+            WHERE branch_id=? AND created_at >= DATE_FORMAT(CURDATE(),'%Y-%m-01')
         ''', (b['id'],)).fetchone()[0]
         data.append({'name': b['name'], 'revenue': rev})
     conn.close()
@@ -1507,4 +1674,9 @@ if __name__ == '__main__':
     print('=' * 50)
     init_db()
     print('\nOpen: http://localhost:5001\n')
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    try:
+        from waitress import serve          # fast production server
+        serve(app, host='0.0.0.0', port=5001, threads=8)
+    except ImportError:
+        print('Tip: run  pip install waitress  for a faster server.\n')
+        app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
