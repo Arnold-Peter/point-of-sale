@@ -1,5 +1,4 @@
 import hashlib
-from datetime import datetime
 from database import get_db
 
 
@@ -22,9 +21,7 @@ def verify_user(username, password):
 
 def log_action(user_id, username, action):
     conn = get_db()
-    conn.execute(
-        'INSERT INTO login_logs (user_id, username, action, `timestamp`) '
-        'VALUES (?,?,?,?)',
-        (user_id, username, action, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+    conn.execute('INSERT INTO login_logs (user_id, username, action) VALUES (?,?,?)',
+                 (user_id, username, action))
     conn.commit()
     conn.close()

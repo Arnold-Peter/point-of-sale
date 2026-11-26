@@ -3,7 +3,19 @@ import random
 import string
 import time
 import datetime as dt
-from datetime import datetime
+from datetime import datetime as _datetime, timezone, timedelta
+
+EAT = timezone(timedelta(hours=3))      # East Africa Time (Tanzania), UTC+3
+
+
+class datetime(_datetime):
+    """datetime.now() always gives Tanzania time, whatever the PC's time zone is."""
+    @classmethod
+    def now(cls, tz=None):
+        if tz is None:
+            return super().now(EAT).replace(tzinfo=None)
+        return super().now(tz)
+    
 from functools import wraps
 
 from flask import (Flask, render_template, request, redirect,
@@ -1703,6 +1715,16 @@ def api_product(barcode):
                         'unit': p['unit']})
     return jsonify({'found': False})
 
+@app.route('/api/time_check')
+@admin_required
+def api_time_check():
+    conn = get_db()
+    row = conn.execute('SELECT NOW() AS mysql_now, UTC_TIMESTAMP() AS mysql_utc, '
+                       '@@session.time_zone AS tz').fetchone()
+    conn.close()
+    return jsonify({'python_now': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'mysql_now': row['mysql_now'], 'mysql_utc': row['mysql_utc'],
+                    'mysql_time_zone': row['tz']})  
 
 # ── Main ───────────────────────────────────────────────
 if __name__ == '__main__':
