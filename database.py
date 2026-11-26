@@ -60,12 +60,8 @@ class Result:
 _pool = queue.Queue(maxsize=10)
 
 def _tz_offset():
-    """This computer's UTC offset (e.g. '+03:00') so MySQL's NOW() matches your clock."""
-    minutes = int(datetime.datetime.now().astimezone().utcoffset().total_seconds() // 60)
-    sign = '+' if minutes >= 0 else '-'
-    minutes = abs(minutes)
-    return f'{sign}{minutes // 60:02d}:{minutes % 60:02d}'
-
+    """The database clock always runs on Tanzania time."""
+    return '+03:00'
 
 def _connect(with_db=True):
     return pymysql.connect(

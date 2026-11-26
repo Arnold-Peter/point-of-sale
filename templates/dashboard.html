@@ -1,151 +1,187 @@
 {% extends 'base.html' %}
+{% from '_icons.html' import icon %}
 {% block title %}Dashboard — Noddy Store{% endblock %}
+
+{% block extra_css %}
+<style>
+    .header-actions{display:flex;align-items:center;gap:14px;}
+    .clock{font-size:.82rem;color:var(--text-3);}
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
+    .kpi-grid.six{grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;}
+    .kpi-grid.six .stat-card{padding:14px;}
+    .kpi-grid.six .stat-info .number{font-size:1.2rem;}
+    .stat-card.edge-pos{border-color:rgba(34,197,94,.6);}
+    .stat-card.edge-neg{border-color:rgba(239,68,68,.6);}
+    .chip{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:600;}
+    .chip.up{background:rgba(34,197,94,.12);color:var(--success);}
+    .chip.down{background:rgba(239,68,68,.12);color:var(--danger);}
+
+    .pl-strip{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+    .pl-cell{padding:16px;border-right:1px solid var(--border);}
+    .pl-cell:last-child{border-right:none;}
+    .pl-label{font-size:.7rem;color:var(--text-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+    .pl-value{font-size:1.1rem;font-weight:700;color:var(--text);}
+    .pl-value.pos{color:var(--success);}
+    .pl-value.neg{color:var(--danger);}
+    .pl-sub{font-size:.7rem;color:var(--text-3);margin-top:3px;}
+
+    .alert-card{border-color:rgba(251,191,36,.45);}
+    .warn-ico{color:var(--warning);display:inline-flex;vertical-align:-3px;margin-right:6px;}
+    .stock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+    .stock-item{background:var(--raised);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:8px;padding:10px 14px;}
+    .stock-item.out{border-left-color:var(--danger);}
+    .stock-name{font-weight:600;font-size:.85rem;color:var(--text);}
+    .stock-meta{font-size:.75rem;color:var(--text-2);margin-top:2px;}
+    .stock-qty{font-size:.78rem;color:var(--text-2);margin-top:6px;}
+    .stock-qty b{color:var(--text);}
+
+    .two-col{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+    .branch-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:.83rem;}
+    .branch-row:last-child{border-bottom:none;}
+    .branch-row span:last-child{color:var(--text-2);font-size:.75rem;}
+    .badge-credit{background:rgba(251,191,36,.12);color:var(--warning);}
+    .empty{text-align:center;color:var(--text-2);padding:24px;}
+    .empty a{color:var(--text);text-decoration:underline;}
+
+    @media (max-width:900px){
+        .kpi-grid,.kpi-grid.six{grid-template-columns:repeat(2,1fr);}
+        .pl-strip{grid-template-columns:repeat(2,1fr);}
+        .pl-cell{border-bottom:1px solid var(--border);}
+        .two-col{grid-template-columns:1fr;}
+    }
+    @media (max-width:600px){
+        .kpi-grid,.kpi-grid.six,.pl-strip{grid-template-columns:1fr;}
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+{% set np = 'pos' if net_today > 0 else ('neg' if net_today < 0 else '') %}
+
 <div class="page-header">
     <div>
         <h2>Dashboard Overview</h2>
-        <p>Welcome back, <strong style="color:#f39c12">{{ session.full_name }}</strong>
-           · {{ session.branch_name }} · {{ today }}</p>
+        <p>Welcome back, <strong style="color:var(--text)">{{ session.full_name }}</strong> · {{ session.branch_name }} · {{ today }}</p>
     </div>
-    <div style="font-size:0.82rem;color:#888" id="clock"></div>
+    <div class="header-actions">
+        <span class="clock" id="clock"></span>
+        <a href="/pos" class="btn btn-primary">{{ icon('plus', 16) }}New Sale</a>
+    </div>
 </div>
 
-<!-- Row 1: P&L Today -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;">
+<!-- Main KPIs -->
+<div class="kpi-grid">
     <div class="stat-card">
-        <div class="stat-icon" style="background:#2a1a00">💰</div>
+        <div class="stat-icon">{{ icon('banknote') }}</div>
         <div class="stat-info">
-            <div class="number" style="color:#f39c12;font-size:1.2rem">TZS {{ "{:,.0f}".format(revenue_today) }}</div>
+            <div class="number">TZS {{ "{:,.0f}".format(revenue_today) }}</div>
             <div class="label">Today's Revenue</div>
+            {% if rev_change is defined and rev_change is not none and rev_change != 0 %}
+            <span class="chip {{ 'up' if rev_change > 0 else 'down' }}">
+                {{ '▲' if rev_change > 0 else '▼' }} {{ '%.0f'|format(rev_change|abs) }}% vs yesterday
+            </span>
+            {% endif %}
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d2a1a">📈</div>
+        <div class="stat-icon">{{ icon('trending') }}</div>
         <div class="stat-info">
-            <div class="number" style="color:#00ff88;font-size:1.2rem">TZS {{ "{:,.0f}".format(gross_today) }}</div>
+            <div class="number">TZS {{ "{:,.0f}".format(gross_today) }}</div>
             <div class="label">Gross Profit Today</div>
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#2a0d0d">💸</div>
+        <div class="stat-icon">{{ icon('wallet') }}</div>
         <div class="stat-info">
-            <div class="number" style="color:#e94560;font-size:1.2rem">TZS {{ "{:,.0f}".format(expenses_today) }}</div>
+            <div class="number">TZS {{ "{:,.0f}".format(expenses_today) }}</div>
             <div class="label">Expenses Today</div>
         </div>
     </div>
-    <div class="stat-card" style="border-color:{% if net_today>=0 %}#27ae60{% else %}#c0392b{% endif %}">
-        <div class="stat-icon" style="background:{% if net_today>=0 %}#0d2a1a{% else %}#2a0d0d{% endif %}">
-            {% if net_today>=0 %}✅{% else %}❌{% endif %}
-        </div>
+    <div class="stat-card {{ 'edge-pos' if np == 'pos' else ('edge-neg' if np == 'neg' else '') }}">
+        <div class="stat-icon">{{ icon('dollar') }}</div>
         <div class="stat-info">
-            <div class="number" style="color:{% if net_today>=0 %}#00ff88{% else %}#e94560{% endif %};font-size:1.2rem">
-                TZS {{ "{:,.0f}".format(net_today) }}
-            </div>
+            <div class="number {{ np }}">TZS {{ "{:,.0f}".format(net_today) }}</div>
             <div class="label">Net Profit Today</div>
         </div>
     </div>
 </div>
 
-<!-- Row 2: Secondary stats -->
-<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;">
+<!-- Secondary KPIs -->
+<div class="kpi-grid six">
     <div class="stat-card">
-        <div class="stat-icon" style="background:#1a2a00;font-size:1rem">🧾</div>
-        <div class="stat-info">
-            <div class="number" style="color:#8bc34a;font-size:1.2rem">{{ txns_today }}</div>
-            <div class="label">Transactions</div>
-        </div>
+        <div class="stat-icon">{{ icon('receipt', 16) }}</div>
+        <div class="stat-info"><div class="number">{{ txns_today }}</div><div class="label">Transactions</div></div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d1a2a;font-size:1rem">📦</div>
-        <div class="stat-info">
-            <div class="number" style="color:#4a9eff;font-size:1.2rem">{{ total_products }}</div>
-            <div class="label">Products</div>
-        </div>
+        <div class="stat-icon">{{ icon('package', 16) }}</div>
+        <div class="stat-info"><div class="number">{{ total_products }}</div><div class="label">Products</div></div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d2a2a;font-size:1rem">👥</div>
-        <div class="stat-info">
-            <div class="number" style="color:#1abc9c;font-size:1.2rem">{{ total_customers }}</div>
-            <div class="label">Customers</div>
-        </div>
+        <div class="stat-icon">{{ icon('users', 16) }}</div>
+        <div class="stat-info"><div class="number">{{ total_customers }}</div><div class="label">Customers</div></div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d1a2a;font-size:1rem">👤</div>
-        <div class="stat-info">
-            <div class="number" style="color:#9b59b6;font-size:1.2rem">{{ total_staff }}</div>
-            <div class="label">Staff</div>
-        </div>
+        <div class="stat-icon">{{ icon('user', 16) }}</div>
+        <div class="stat-info"><div class="number">{{ total_staff }}</div><div class="label">Staff</div></div>
     </div>
-    <div class="stat-card" style="border-color:{% if debit_customers>0 %}#f39c12{% else %}#1e1e3a{% endif %}">
-        <div class="stat-icon" style="background:{% if debit_customers>0 %}#2a1a00{% else %}#0d2a1a{% endif %};font-size:1rem">📋</div>
+    <div class="stat-card">
+        <div class="stat-icon">{{ icon('card', 16) }}</div>
         <div class="stat-info">
-            <div class="number" style="color:{% if debit_customers>0 %}#f39c12{% else %}#00ff88{% endif %};font-size:1.2rem">
-                {{ debit_customers }}
-            </div>
+            <div class="number">{{ debit_customers }}</div>
             <div class="label">Debtors</div>
+            {% if debit_customers > 0 %}<span class="chip down">Follow up</span>{% endif %}
         </div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon" style="background:#0d2a1a;font-size:1rem">📱</div>
+        <div class="stat-icon">{{ icon('phone', 16) }}</div>
         <div class="stat-info">
-            <div class="number" style="color:#00ff88;font-size:1rem">
-                TZS {{ "{:,.0f}".format(mm_today.total) }}
-            </div>
+            <div class="number">TZS {{ "{:,.0f}".format(mm_today.total) }}</div>
             <div class="label">Mobile Money Today</div>
         </div>
     </div>
 </div>
 
-<!-- Today P&L Summary -->
-<div class="card" style="margin-bottom:16px;border-color:{% if net_today>=0 %}#2a5a2a{% else %}#5a2a2a{% endif %}">
+<!-- Profit & Loss: one neutral strip, only net profit is coloured -->
+<div class="card">
     <div class="card-header">
-        <h3>Today's Profit & Loss — {{ today }}</h3>
-        <a href="/reports?period=daily" class="btn btn-secondary btn-sm">Full Report →</a>
+        <h3>Today's Profit &amp; Loss — {{ today }}</h3>
+        <a href="/reports?period=daily" class="btn btn-secondary btn-sm">Full report →</a>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-radius:8px;overflow:hidden;border:1px solid #1e1e3a;">
-        {% for label,value,color,bg in [
-            ('Revenue',      revenue_today,    '#f39c12', '#1a1000'),
-            ('Cost of Goods',cost_today,       '#9b59b6', '#0d0514'),
-            ('Gross Profit', gross_today,      '#00ff88', '#001a0d'),
-            ('Expenses',     expenses_today,   '#e94560', '#1a0000'),
-            ('Net Profit',   net_today,        '#00ff88' if net_today>=0 else '#e94560','#001a0d' if net_today>=0 else '#1a0000')
-        ] %}
-        <div style="text-align:center;padding:16px 8px;background:{{ bg }};border-right:1px solid #1e1e3a;">
-            <div style="font-size:0.68rem;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">
-                {{ label }}
-            </div>
-            <div style="font-size:1rem;font-weight:700;color:{{ color }}">
-                TZS {{ "{:,.0f}".format(value) }}
-            </div>
-            {% if revenue_today>0 and label!='Revenue' %}
-            <div style="font-size:0.65rem;color:#555;margin-top:3px;">
-                {{ "{:.1f}".format(value/revenue_today*100) }}% of rev
-            </div>
+    <div class="pl-strip">
+        {% for label, value in [('Revenue', revenue_today), ('Cost of goods', cost_today), ('Gross profit', gross_today), ('Expenses', expenses_today)] %}
+        <div class="pl-cell">
+            <div class="pl-label">{{ label }}</div>
+            <div class="pl-value">TZS {{ "{:,.0f}".format(value) }}</div>
+            {% if revenue_today > 0 and label != 'Revenue' %}
+            <div class="pl-sub">{{ "{:.1f}".format(value / revenue_today * 100) }}% of revenue</div>
             {% endif %}
         </div>
         {% endfor %}
+        <div class="pl-cell">
+            <div class="pl-label">Net profit</div>
+            <div class="pl-value {{ np }}">TZS {{ "{:,.0f}".format(net_today) }}</div>
+            {% if revenue_today > 0 %}
+            <div class="pl-sub">{{ "{:.1f}".format(net_today / revenue_today * 100) }}% of revenue</div>
+            {% endif %}
+        </div>
     </div>
 </div>
 
-<!-- Low stock alert — shows product names -->
+<!-- Low stock: names the products. Out of stock = red, running low = yellow -->
 {% if low_stock_items %}
-<div class="card" style="margin-bottom:16px;border-color:#c0392b;">
+<div class="card alert-card">
     <div class="card-header">
-        <h3 style="color:#e94560">⚠ Low Stock Alert — {{ low_stock_count }} products need restocking</h3>
-        <a href="/stock" class="btn btn-danger btn-sm">View All Stock</a>
+        <h3><span class="warn-ico">{{ icon('alert', 18) }}</span>Low stock — {{ low_stock_count }} product{{ '' if low_stock_count == 1 else 's' }} need restocking</h3>
+        <a href="/stock" class="btn btn-secondary btn-sm">View stock</a>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">
+    <div class="stock-grid">
         {% for p in low_stock_items %}
-        <div style="background:#1a0000;border:1px solid #3a1a1a;border-radius:8px;padding:10px 14px;">
-            <div style="font-weight:600;color:#e94560;font-size:0.85rem;margin-bottom:2px;">
-                {{ p.name }}
-            </div>
-            <div style="font-size:0.75rem;color:#888;">
-                {{ p.cat_name or 'Uncategorised' }} · {{ p.branch_name }}
-            </div>
-            <div style="margin-top:4px;font-size:0.78rem;">
-                <span style="color:#e94560;font-weight:bold">{{ p.stock_qty }} {{ p.unit }}</span>
-                <span style="color:#555"> left / min {{ p.min_stock }}</span>
+        <div class="stock-item {{ 'out' if p.stock_qty <= 0 else '' }}">
+            <div class="stock-name">{{ p.name }}</div>
+            <div class="stock-meta">{{ p.cat_name or 'Uncategorised' }} · {{ p.branch_name }}</div>
+            <div class="stock-qty">
+                <b>{{ p.stock_qty }} {{ p.unit }}</b> left · min {{ p.min_stock }}
+                {% if p.stock_qty <= 0 %}<span class="badge badge-danger">Out of stock</span>{% endif %}
             </div>
         </div>
         {% endfor %}
@@ -153,13 +189,9 @@
 </div>
 {% endif %}
 
-<!-- Charts + branches -->
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px;">
+<div class="two-col">
     <div class="card">
-        <div class="card-header">
-            <h3>Sales This Week</h3>
-            <a href="/pos" class="btn btn-primary btn-sm">+ New Sale</a>
-        </div>
+        <div class="card-header"><h3>Sales this week</h3></div>
         <canvas id="salesChart" height="120"></canvas>
     </div>
     <div class="card">
@@ -168,45 +200,34 @@
             <a href="/branch/overview" class="btn btn-secondary btn-sm">Overview</a>
         </div>
         {% for b in branches %}
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e1e3a;font-size:0.83rem;">
-            <span>🏬 {{ b.name }}</span>
-            <span style="color:#888;font-size:0.75rem">{{ b.location }}</span>
-        </div>
+        <div class="branch-row"><span>{{ b.name }}</span><span>{{ b.location }}</span></div>
         {% endfor %}
     </div>
 </div>
 
-<!-- Recent sales -->
 <div class="card">
     <div class="card-header">
-        <h3>Recent Sales</h3>
-        <a href="/sales" class="btn btn-secondary btn-sm">View All</a>
+        <h3>Recent sales</h3>
+        <a href="/sales" class="btn btn-secondary btn-sm">View all</a>
     </div>
     <table>
         <thead>
-            <tr><th>Receipt</th><th>Cashier</th><th>Branch</th>
-                <th>Amount</th><th>Payment</th><th>Time</th></tr>
+            <tr><th>Receipt</th><th>Cashier</th><th>Branch</th><th>Amount</th><th>Payment</th><th>Time</th></tr>
         </thead>
         <tbody>
             {% for s in recent_sales %}
             <tr>
-                <td style="color:#f39c12">{{ s.receipt_no }}</td>
+                <td>{{ s.receipt_no }}</td>
                 <td>{{ s.cashier }}</td>
                 <td>{{ s.branch_name }}</td>
                 <td><strong>TZS {{ "{:,.0f}".format(s.total_amount) }}</strong></td>
                 <td>
-                    <span class="badge badge-{% if s.payment_type=='cash' %}success{% elif s.payment_type=='card' %}info{% else %}warning{% endif %}">
-                        {{ s.payment_type }}
-                    </span>
+                    <span class="badge {% if s.payment_type == 'credit' %}badge-credit{% else %}badge-info{% endif %}">{{ s.payment_type }}</span>
                 </td>
-                <td style="color:#888">{{ s.created_at[11:16] }}</td>
+                <td style="color:var(--text-2)">{{ s.created_at[11:16] }}</td>
             </tr>
             {% else %}
-            <tr>
-                <td colspan="6" style="text-align:center;color:#555;padding:24px">
-                    No sales today — <a href="/pos" style="color:#f39c12">Make your first sale</a>
-                </td>
-            </tr>
+            <tr><td colspan="6" class="empty">No sales yet — <a href="/pos">make your first sale</a></td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -216,17 +237,28 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
-function tick(){document.getElementById('clock').textContent=new Date().toLocaleString();}
-setInterval(tick,1000);tick();
-fetch('/api/stats').then(r=>r.json()).then(data=>{
-    new Chart(document.getElementById('salesChart'),{
-        type:'bar',
-        data:{labels:data.sales_week.map(d=>d.day.slice(5)),
-              datasets:[{data:data.sales_week.map(d=>d.total),
-                         backgroundColor:'#f39c12',borderRadius:6}]},
-        options:{responsive:true,plugins:{legend:{display:false}},
-                 scales:{x:{grid:{color:'#1e1e3a'},ticks:{color:'#888'}},
-                         y:{grid:{color:'#1e1e3a'},ticks:{color:'#888'},beginAtZero:true}}}
+function tick() { document.getElementById('clock').textContent = new Date().toLocaleString(); }
+setInterval(tick, 1000); tick();
+
+fetch('/api/stats').then(function (r) { return r.json(); }).then(function (data) {
+    new Chart(document.getElementById('salesChart'), {
+        type: 'bar',
+        data: {
+            labels: data.sales_week.map(function (d) { return d.day.slice(5); }),
+            datasets: [{
+                data: data.sales_week.map(function (d) { return d.total; }),
+                backgroundColor: '#60A5FA', borderRadius: 6,
+                maxBarThickness: 44, barPercentage: 0.7, categoryPercentage: 0.7
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: '#6B7590' } },
+                y: { grid: { color: '#26304D' }, ticks: { color: '#6B7590' }, beginAtZero: true }
+            }
+        }
     });
 });
 </script>
